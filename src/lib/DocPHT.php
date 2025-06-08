@@ -13,10 +13,9 @@
 
 namespace DocPHT\Lib;
 
-use ParsedownCheckbox;
-use Emojione\Client;
-use Emojione\Ruleset;
 use DocPHT\Core\Translator\T;
+use Parsedown;
+use Spatie\Emoji\Emoji;
 
 class DocPHT {
 
@@ -40,14 +39,15 @@ class DocPHT {
      *
      * @return string
      */
-    public function title(string $title, string $anchorLinkID = null)
+    public function title(string $title, ?string $anchorLinkID = null): string
     {
-       $client = new Client(new Ruleset());
-       $title = $client->shortnameToUnicode($title);
-       if (isset($anchorLinkID)) {
-        return '<tr>'. ((isset($_SESSION['Active'])) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td><h2 class="mt-3 mb-3" id="'.$anchorLinkID.'">'.$title.' '.$this->insertBeforeButton().$this->removeButton().$this->modifyButton().$this->insertAfterButton().'</h2></td></tr>';
-       } 
-       return '<tr>'. ((isset($_SESSION['Active'])) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td><h2 class="mt-3 mb-3">'.$title.' '.$this->insertBeforeButton().$this->removeButton().$this->modifyButton().$this->insertAfterButton().' </h2></td></tr>';
+        $title = Emoji::shortnameToUnicode($title);
+        $idAttribute = $anchorLinkID ? ' id="' . $anchorLinkID . '"' : '';
+        $sessionActive = isset($_SESSION['Active']);
+        $handle = $sessionActive ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '';
+        $buttons = $sessionActive ? $this->insertBeforeButton() . $this->removeButton() . $this->modifyButton() . $this->insertAfterButton() : '';
+
+        return "<tr>{$handle}<td><h2 class=\"mt-3 mb-3\"{$idAttribute}>{$title} {$buttons}</h2></td></tr>";
     }
 
     
@@ -58,48 +58,33 @@ class DocPHT {
      *
      * @return string
      */
-    public function anchorLinks(array $anchorLinks = null)
+    public function anchorLinks(?array $anchorLinks = null): void
     {
-        $client = new Client(new Ruleset());
-        
-        if (isset($anchorLinks)) {
-            echo '<nav class="navbar navbar-expand-lg navbar-light bg-light">
-                    <div class="container-fluid">
+        echo <<<HTML
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container-fluid">
+                <button type="button" id="sidebarCollapse" class="btn btn-secondary">
+                    <i class="fa fa-align-left"></i>
+                </button>
+                <button class="btn btn-dark d-inline-block d-lg-none ml-auto" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                    <i class="fa fa-align-justify"></i>
+                </button>
+        HTML;
 
-                        <button type="button" id="sidebarCollapse" class="btn btn-secondary">
-                            <i class="fa fa-align-left"></i>
-                        </button>
-                        <button class="btn btn-dark d-inline-block d-lg-none ml-auto" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-                            <i class="fa fa-align-justify"></i>
-                        </button>
-
-                        <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                        <ul class="nav navbar-nav ml-auto">
-                            '; foreach ($anchorLinks as $value) {
-                                $title = $client->shortnameToImage(ucfirst(str_replace('-',' ',$value)));
-                                echo '<li class="nav-item">
-                                            <a class="nav-link" href="'.$_SERVER['REQUEST_URI'].'#'.$value.'">'.$title.'</a>
-                                      </li>';
-                            };
-                    echo '</ul></div>
-                    </div>
-                </nav>
-                <div class="table-responsive"><table class="sortable" width="100%"><tbody>';
-        } else {
-            echo '<nav class="navbar navbar-expand-lg navbar-light bg-light">
-                    <div class="container-fluid">
-
-                        <button type="button" id="sidebarCollapse" class="btn btn-secondary">
-                            <i class="fa fa-align-left"></i>
-                        </button>
-                        <button class="btn btn-dark d-inline-block d-lg-none ml-auto" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-                            <i class="fa fa-align-justify"></i>
-                        </button>
-                        
-                    </div>
-                </nav>
-                <div class="table-responsive"><table class="sortable" width="100%"><tbody>';
+        if (!empty($anchorLinks)) {
+            echo '<div class="collapse navbar-collapse" id="navbarSupportedContent"><ul class="nav navbar-nav ml-auto">';
+            foreach ($anchorLinks as $value) {
+                $title = Emoji::shortnameToImage(ucfirst(str_replace('-', ' ', $value)));
+                echo '<li class="nav-item"><a class="nav-link" href="' . htmlspecialchars($_SERVER['REQUEST_URI'], ENT_QUOTES, 'UTF-8') . '#' . $value . '">' . $title . '</a></li>';
+            }
+            echo '</ul></div>';
         }
+
+        echo <<<HTML
+            </div>
+        </nav>
+        <div class="table-responsive"><table class="sortable" width="100%"><tbody>
+        HTML;
     }
 
     /**
@@ -111,8 +96,7 @@ class DocPHT {
      */
     public function description(string $description)
     {
-       $client = new Client(new Ruleset());
-       $description = $client->shortnameToUnicode(nl2br($description));
+       $description = Emoji::shortnameToUnicode(nl2br($description));
        return '<tr>'. ((isset($_SESSION['Active'])) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td><p>'.$description.' '.$this->insertBeforeButton().$this->removeButton().$this->modifyButton().$this->insertAfterButton().'</p></td></tr>';
     }
 
@@ -125,8 +109,7 @@ class DocPHT {
      */
     public function blockquote(string $blockquote)
     {
-       $client = new Client(new Ruleset());
-       $blockquote = $client->shortnameToUnicode(nl2br($blockquote));
+       $blockquote = Emoji::shortnameToUnicode(nl2br($blockquote));
        return '<tr>'. ((isset($_SESSION['Active'])) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td><blockquote>'.$blockquote.' '.$this->insertBeforeButton().$this->removeButton().$this->modifyButton().$this->insertAfterButton().'</blockquote></td></tr>';
     }
 
@@ -219,8 +202,7 @@ class DocPHT {
      */
     public function linkButton(string $url, string $title, $target = false)
     {
-        $client = new Client(new Ruleset());
-        $title = $client->shortnameToUnicode($title);
+        $title = Emoji::shortnameToUnicode($title);
         $setTarget = ($target) ? 'target="_blank"' : '' ;
         return '<tr>'. ((isset($_SESSION['Active'])) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td><span class="spinner-grow spinner-grow-sm text-secondary"></span><a href="'.$url.'" '.$setTarget.' class="link" role="button">'.$title.'</a>'.$this->insertBeforeButton().$this->removeButton().$this->modifyButton().$this->insertAfterButton().'</td></tr>';
     }
@@ -234,10 +216,10 @@ class DocPHT {
      */
     public function markdown(string $text)
     {
-        $Parsedown = new ParsedownCheckbox();
-        $client = new Client(new Ruleset());
-        $markdown = '<tr>'. ((isset($_SESSION['Active'])) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td class="markdown-col">';
-        $markdown .= $Parsedown->text($client->shortnameToUnicode($text));
+        $Parsedown = new Parsedown();
+        $textWithEmoji = Emoji::shortnameToUnicode($text);
+        $markdown = '<tr>' . (isset($_SESSION['Active']) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td class="markdown-col">';
+        $markdown .= $Parsedown->text($textWithEmoji);
         $markdown .= $this->insertBeforeButton().$this->removeButton().$this->modifyButton().$this->insertAfterButton().'</td></tr>';
         return $markdown;
     }
@@ -251,10 +233,11 @@ class DocPHT {
      */
     public function markdownFile(string $filePath)
     {   
-        $Parsedown = new ParsedownCheckbox();
-        $client = new Client(new Ruleset());
-        $markdown = '<tr>'. ((isset($_SESSION['Active'])) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td class="markdown-col">';
-        $markdown .= $Parsedown->text($client->shortnameToUnicode(file_get_contents('data/'.$filePath)));
+        $Parsedown = new Parsedown();
+        $fileContent = file_get_contents('data/' . $filePath);
+        $textWithEmoji = Emoji::shortnameToUnicode($fileContent);
+        $markdown = '<tr>' . (isset($_SESSION['Active']) ? '<td class="handle"><i class="fa fa-arrows-v sort"></i></td>' : '') . '<td class="markdown-col">';
+        $markdown .= $Parsedown->text($textWithEmoji);
         $markdown .= $this->insertBeforeButton().$this->removeButton().$this->modifyButton().$this->insertAfterButton().'</td></tr>';
         return $markdown;
     }

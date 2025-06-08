@@ -1,18 +1,16 @@
 <?php
 
-namespace Curl;
+declare(strict_types=1);
 
-use Curl\CaseInsensitiveArray;
+namespace Curl;
 
 class ArrayUtil
 {
     /**
      * Is Array Assoc
      *
-     * @access public
-     * @param  $array
-     *
-     * @return boolean
+     * @param       $array
+     * @return bool
      */
     public static function isArrayAssoc($array)
     {
@@ -26,10 +24,8 @@ class ArrayUtil
      * Is Array Assoc
      *
      * @deprecated Use ArrayUtil::isArrayAssoc().
-     * @access public
-     * @param  $array
-     *
-     * @return boolean
+     * @param       $array
+     * @return bool
      */
     public static function is_array_assoc($array)
     {
@@ -39,10 +35,8 @@ class ArrayUtil
     /**
      * Is Array Multidim
      *
-     * @access public
-     * @param  $array
-     *
-     * @return boolean
+     * @param       $array
+     * @return bool
      */
     public static function isArrayMultidim($array)
     {
@@ -57,10 +51,8 @@ class ArrayUtil
      * Is Array Multidim
      *
      * @deprecated Use ArrayUtil::isArrayMultidim().
-     * @access public
-     * @param  $array
-     *
-     * @return boolean
+     * @param       $array
+     * @return bool
      */
     public static function is_array_multidim($array)
     {
@@ -70,40 +62,47 @@ class ArrayUtil
     /**
      * Array Flatten Multidim
      *
-     * @access public
-     * @param  $array
-     * @param  $prefix
-     *
+     * @param        $array
+     * @param        $prefix
      * @return array
      */
     public static function arrayFlattenMultidim($array, $prefix = false)
     {
-        $return = array();
+        $return = [];
         if (is_array($array) || is_object($array)) {
             if (empty($array)) {
                 $return[$prefix] = '';
             } else {
+                $arrays_to_merge = [];
+
                 foreach ($array as $key => $value) {
                     if (is_scalar($value)) {
                         if ($prefix) {
-                            $return[$prefix . '[' . $key . ']'] = $value;
+                            $arrays_to_merge[] = [
+                                $prefix . '[' . $key . ']' => $value,
+                            ];
                         } else {
-                            $return[$key] = $value;
+                            $arrays_to_merge[] = [
+                                $key => $value,
+                            ];
                         }
+                    } elseif ($value instanceof \CURLFile) {
+                        $arrays_to_merge[] = [
+                            $key => $value,
+                        ];
+                    } elseif ($value instanceof \CURLStringFile) {
+                        $arrays_to_merge[] = [
+                            $key => $value,
+                        ];
                     } else {
-                        if ($value instanceof \CURLFile) {
-                            $return[$key] = $value;
-                        } else {
-                            $return = array_merge(
-                                $return,
-                                self::arrayFlattenMultidim(
-                                    $value,
-                                    $prefix ? $prefix . '[' . $key . ']' : $key
-                                )
-                            );
-                        }
+                        $arrays_to_merge[] = self::arrayFlattenMultidim(
+                            $value,
+                            $prefix ? $prefix . '[' . $key . ']' : $key
+                        );
                     }
                 }
+
+                $return = array_merge($return, ...$arrays_to_merge);
             }
         } elseif ($array === null) {
             $return[$prefix] = $array;
@@ -115,10 +114,8 @@ class ArrayUtil
      * Array Flatten Multidim
      *
      * @deprecated Use ArrayUtil::arrayFlattenMultidim().
-     * @access public
-     * @param  $array
-     * @param  $prefix
-     *
+     * @param        $array
+     * @param        $prefix
      * @return array
      */
     public static function array_flatten_multidim($array, $prefix = false)
@@ -129,23 +126,30 @@ class ArrayUtil
     /**
      * Array Random
      *
-     * @access public
-     * @param  $array
-     *
+     * @param        $array
      * @return mixed
      */
     public static function arrayRandom($array)
     {
-        return $array[mt_rand(0, count($array) - 1)];
+        return $array[static::arrayRandomIndex($array)];
+    }
+
+    /**
+     * Array Random Index
+     *
+     * @param      $array
+     * @return int
+     */
+    public static function arrayRandomIndex($array)
+    {
+        return mt_rand(0, count($array) - 1);
     }
 
     /**
      * Array Random
      *
      * @deprecated Use ArrayUtil::arrayRandom().
-     * @access public
-     * @param  $array
-     *
+     * @param        $array
      * @return mixed
      */
     public static function array_random($array)

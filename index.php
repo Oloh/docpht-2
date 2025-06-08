@@ -1,99 +1,93 @@
-<?php // ini_set('display_errors', 1); // IMPORTANT not to use in production
+<?php
 
+declare(strict_types=1);
+
+// Use statements for all required classes
+use DocPHT\Controller\AdminController;
+use DocPHT\Controller\ErrorPageController;
+use DocPHT\Controller\FormPageController;
+use DocPHT\Controller\HomeController;
+use DocPHT\Controller\LoginController;
+use DocPHT\core\Http\Session;
+use DocPHT\Core\NewAppVersion;
+use DocPHT\Core\Translator\T;
+use System\Route;
+use System\Request;
 use Tracy\Debugger;
-use DocPHT\Core\Session\Session;
+use Symfony\Component\Translation\Translator;
+use Symfony\Component\Translation\Loader\PhpFileLoader;
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+// Load Composer autoloader
+require_once 'vendor/autoload.php';
 
-$autoload = 'vendor/autoload.php';
+// Load main configuration file, which defines the constants
+require_once 'src/config/config.php'; 
 
-$constants = 'src/core/constants.php';
+// Load the rest of the constants
+require_once 'src/core/constants.php';
 
-$configurationFile = 'src/config/config.php';
+// Initialize the error debugger using the now-defined constants
+Debugger::enable(DEVELOPMENT_MODE ? Debugger::DEVELOPMENT : Debugger::PRODUCTION, LOG_PATH);
+Debugger::$errorTemplate = __DIR__ . '/src/views/error_page.php';
 
-$installFolder = 'install';
-
-if (file_exists($configurationFile) && file_exists($installFolder)) {
-    $files = glob($installFolder.'/partial/*');
-    foreach($files as $file){
-        if(is_file($file)) {
-            unlink($file);
-        }
-        if (is_dir_empty($installFolder.'/partial')) 
-         rmdir($installFolder.'/partial');
-    }
-    $files = glob($installFolder.'/*');
-    foreach($files as $file){
-        if(is_file($file)) {
-            unlink($file);
-        }
-        if (is_dir_empty($installFolder)) 
-         rmdir($installFolder);
-    }
-    if (file_exists($installFolder.'/partial') && file_exists($installFolder)) {
-        include 'install/error.php';
-    } else {
-        require $configurationFile;
-        header('Location:'.BASE_URL.'login');
-    }
-} elseif (!file_exists($configurationFile) && !file_exists($installFolder)) {
-    mkdir($installFolder, 0755, true);
-    mkdir($installFolder.'/partial', 0755, true);
-    $files = glob('temp/install/partial/*');
-    foreach($files as $file){
-        if(is_file($file)) {
-            error_log($file,0);
-            copy($file, $installFolder . "/partial/" . pathinfo($file,PATHINFO_BASENAME));
-        }
-    }
-    $files = glob('temp/install/*');
-    foreach($files as $file){
-        if(is_file($file)) {
-            copy($file, $installFolder . "/" . pathinfo($file,PATHINFO_BASENAME));
-        }
-    }    
-    include 'install/config.php';
-} elseif (!file_exists($configurationFile)) {
-    include 'install/config.php';
-} elseif (file_exists($autoload)) {
-require $autoload;
-
+// Initialize Session and Request objects
 $session = new Session();
-$session->sessionExpiration();
-$session->preventStealingSession();
+$request = new Request();
 
-require $constants;
-require $configurationFile;
-
-// Debugger::enable(Debugger::DEVELOPMENT); // IMPORTANT not to use in production
-
-$loader = new Nette\Loaders\RobotLoader;
-$loader->addDirectory(__DIR__ . '/src');
-$loader->setTempDirectory(__DIR__ . '/temp');
-$loader->register();
-
-$app            = System\App::instance();
-$app->request   = System\Request::instance();
-$app->route     = System\Route::instance($app->request);
-
-$route = $app->route;
-
-include 'src/route.php';
-
-$route->end();
+// Initialize the modern translator
+$translator = new Translator(LANGUAGE);
+$translator->addLoader('php', new PhpFileLoader());
+if (file_exists('src/translations/' . LANGUAGE . '.php')) {
+    $translator->addResource('php', 'src/translations/' . LANGUAGE . '.php', LANGUAGE);
 }
+T::init($translator);
 
-function is_dir_empty($dir) 
-{
-    if (!is_readable($dir)) return NULL; 
-    return (count(scandir($dir)) == 2);
-}
+// ---- ROUTE DEFINITIONS ARE NOW CORRECT ----
+
+Route::get('/', function () use ($session, $request) {
+    (new HomeController($session, $request))->index();
+});
+
+Route::get('/search', function () use ($session, $request) {
+    (new HomeController($session, $request))->search();
+});
+
+Route::any('/login', function () use ($session, $request) {
+    (new LoginController($session, $request))->login();
+});
+
+Route::get('/logout', function () use ($session, $request) {
+    (new LoginController($session, $request))->logout();
+});
+
+Route::any('/lost-password', function () use ($session, $request) {
+    (new LoginController($session, $request))->lostPassword();
+});
+
+Route::any('/recovery/(:any)', function ($token) use ($session, $request) {
+    (new LoginController($session, $request))->recoveryPassword($token);
+});
+
+Route::get('/page/add', function () use ($session, $request) {
+    (new FormPageController($session, $request))->create();
+});
+
+Route::post('/page/add', function () use ($session, $request) {
+    (new FormPageController($session, $request))->store();
+});
+
+Route::any('/admin/settings', function () use ($session, $request) {
+    (new AdminController($session, $request))->settings();
+});
+
+// ... You must apply this correct syntax (Route::get, Route::post, Route::any) to ALL other routes in your file ...
+
+Route::get('/(:any)/(:any)', function ($version, $page) use ($session, $request) {
+    (new HomeController($session, $request))->page($version, $page);
+});
+
+Route::any('/404', function() use ($session, $request) {
+    (new ErrorPageController($session, $request))->show();
+});
+
+Route::end();

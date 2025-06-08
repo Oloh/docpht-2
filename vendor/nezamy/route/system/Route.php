@@ -123,8 +123,8 @@ class Route
                 );
 
                 // If matched.
-                $methodMatch = count($method) > 0 ? in_array($this->req->method, $method) : true;
-                if ($methodMatch && $this->matched($pattern)) {
+                $method = count($method) > 0 ? in_array($this->req->method, $method) : true;
+                if ($method && $this->matched($pattern)) {
                     if ($this->isGroup) {
                         $this->prams = array_merge($this->pramsGroup, $this->prams);
                     }
@@ -133,7 +133,6 @@ class Route
 
                     $this->matchedPath = $this->currentUri;
                     $this->routeCallback[] = $callback;
-                    $this->matched = true;
 
                     if ($options['continue']) {
                         $this->matched = false;
@@ -164,8 +163,8 @@ class Route
         if (is_array($group)) {
             foreach ($group as $k => $p) {
                 $this->group($p, $callback, [
-                    'as' => isset($options['as'][$k]) ? $options['as'][$k] : '',
-                    'namespace' => isset($options['namespace'][$k]) ? $options['namespace'][$k] : ''
+                    'as' => $options['as'][$k],
+                    'namespace' => $options['namespace'][$k]
                 ]);
             }
             return $this;
@@ -180,6 +179,7 @@ class Route
         // Add this group and sub-groups to append to route uri.
         $this->group .= $group;
         // Bind to Route Class.
+//        $callback = $callback->bindTo($this);
         $callback = Closure::bind($callback, $this, get_class());
         // Call with args.
         call_user_func_array($callback, $this->bindArgs($this->pramsGroup, $this->matchedArgs));
@@ -187,7 +187,7 @@ class Route
         $this->isGroup = false;
         $this->pramsGroup = $this->pattGroup = [];
         $this->group = substr($this->group, 0, -strlen($group));
-        $this->setGroupAs(substr($this->getGroupAs(), 0, -(strlen($options['as']) + 1)), true);
+        $this->setGroupAs(substr($this->getGroupAs(), 0, -(strlen($options['as']) + 2)), true);
 
         return $this;
     }
@@ -200,6 +200,8 @@ class Route
             'multiIdPattern' => ':multiInt'
         ], $options);
 
+        $controller = $controller;
+
         if (class_exists($controller))
         {
             $this->generated = false;
@@ -209,13 +211,22 @@ class Route
             $withID = $uri.'/{id}'.$options['idPattern'];
             $deleteMulti = $uri.'/{id}'.$options['multiIdPattern'];
 
-            $this->route(['GET'], $uri, [$controller, 'index'], $options)->_as($as.'.index');
-            $this->route(['GET'], $uri. '/create', [$controller, 'create'], $options)->_as($as.'.create');
+            $this->route(['GET'], $uri, [$controller, 'index'], $options)->_as($as);
+
+            $this->route(['GET'], $uri. '/get', [$controller, 'get'], $options)->_as($as.'.get');
+
+            $this->route(['GET'], $uri . '/create', [$controller, 'create'], $options)->_as($as.'.create');
+
             $this->route(['POST'], $uri, [$controller, 'store'], $options)->_as($as.'.store');
+
             $this->route(['GET'], $withID, [$controller, 'show'], $options)->_as($as.'.show');
+
             $this->route(['GET'], $withID . '/edit', [$controller, 'edit'], $options)->_as($as.'.edit');
+
             $this->route(['PUT', 'PATCH'], $withID, [$controller, 'update'], $options)->_as($as.'.update');
+
             $this->route(['DELETE'], $deleteMulti, [$controller, 'destroy'], $options)->_as($as.'.destroy');
+
 
             $this->route([], $uri . '/*', function (Request $req, Response $res) {
                 http_response_code(404);
@@ -225,11 +236,11 @@ class Route
         } else {
             throw new \Exception("Not found Controller {$controller} try with namespace");
         }
-        return $this;
     }
 
     public function controller($uri, $controller, $options = [])
     {
+        $controller = $controller;
         if (class_exists($controller))
         {
             $methods = get_class_methods($controller);
@@ -239,7 +250,7 @@ class Route
                 $request 	= strtoupper(array_shift($split));
                 $fullUri 	= $uri .'/'. implode('-', $split);
 
-                if (isset($split[0]) && strtolower($split[0]) == 'index') {
+                if (isset($split[0]) && $split[0] == 'Index') {
                     $fullUri= $uri .'/';
                 }
 
@@ -248,19 +259,17 @@ class Route
                 $fullUri 	= [$fullUri.'/*', $fullUri];
                 $call 		= [$controller, $v];
 
-                if (isset($split[0]) && strtolower($split[0]) == 'index') {
+                if (isset($split[0]) && $split[0] == 'Index') {
                     $fullUri = $uri;
                 }
-                
-                $requestMethods = explode('_', $request);
-                $this->route($requestMethods, $fullUri, $call, $options)->_as($as);
+                $methods = explode('_', $request);
+                $this->route($request, $fullUri, $call, $options)->_as($as);
             }
         } else {
             throw new \Exception("Not found Controller {$controller} try with namespace");
         }
-        return $this;
     }
-    
+
     /**
      * Bind args and parameters.
      *
@@ -285,6 +294,7 @@ class Route
                 }
                 $this->fullArg = $newArgs[0] = $args[0];
             }
+            // pre($args);
             if (count($args)) {
                 $newArgs = array_merge($newArgs, $args);
             }
@@ -417,6 +427,9 @@ class Route
     {
         if (empty($name)) return $this;
         $name = rtrim($this->getGroupAs() . str_replace('/', '.', strtolower($name)), '.');
+//        if (array_key_exists($name, $this->routes)) {
+//            throw new \Exception("Route name ($name) already registered.");
+//        }
 
         $patt = $this->patt;
         $pram = $this->prams;
@@ -616,20 +629,18 @@ class Route
             } elseif (is_string($callback) && strpos($callback, '@') !== false) {
                 $fixcallback = explode('@', $callback, 2);
                 $this->Controller = $fixcallback[0];
-                $this->Method = isset($fixcallback[1]) ? $fixcallback[1] : 'index';
-                $callback = [$this->Controller, $this->Method];
 
-                if (!class_exists($callback[0])) {
-                    throw new \Exception("Controller class '{$callback[0]}' not found.");
-                }
-
-                if (!method_exists($callback[0], $callback[1])) {
-                    throw new \Exception("Callable error on {$callback[0]} -> {$callback[1]} ! Method does not exist.");
+                if (is_callable(
+                    $callback = [$fixcallback[0], (isset($fixcallback[1]) ? $fixcallback[1] : 'index')]
+                )) {
+                    $this->Method = $callback[1];
+                } else {
+                    throw new \Exception("Callable error on {$callback[0]} -> {$callback[1]} !");
                 }
             }
 
             if (is_array($callback) && !is_object($callback[0])) {
-                $callback[0] = new $callback[0]();
+                $callback[0] = new $callback[0];
             }
 
             if (isset($args[0]) && $args[0] == $this->fullArg) {
@@ -641,7 +652,6 @@ class Route
         }
         return false;
     }
-
 
     /**
      * Magic call.
@@ -689,11 +699,6 @@ class Route
     public function __set($k, $v)
     {
         $this->{$k} = $v instanceof \Closure ? $v->bindTo($this) : $v;
-    }
-    
-    private function trimc($str)
-    {
-        return str_replace([' '], [''], $str);
     }
 
 }
