@@ -12,7 +12,7 @@
  * 
  */
 
-namespace DocPHT\Form;
+namespace App\Forms;
 
 use Nette\Forms\Form;
 use Nette\Utils\Html;

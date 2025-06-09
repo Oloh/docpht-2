@@ -11,7 +11,7 @@
  * file that was distributed with this source code.
  */
 
-namespace DocPHT\Core\Translator;
+namespace App\Core\Translations;
 
 use DocPHT\Model\AdminModel;
 use Symfony\Component\Translation\Translator;

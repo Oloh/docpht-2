@@ -39,7 +39,7 @@
  * hideBySlug($slug)
  * getStatusPublished()
  */
-namespace DocPHT\Model;
+namespace App\Model;
 
 use DocPHT\Core\Translator\T;
 

@@ -11,7 +11,7 @@
  * file that was distributed with this source code.
  */
 
-namespace DocPHT\Form;
+namespace App\Forms;
 
 use Latte\Engine;
 use Nette\Forms\Form;

@@ -11,7 +11,7 @@
  * file that was distributed with this source code.
  */
 
-namespace DocPHT\Controller;
+namespace App\Controller;
 
 use Instant\Core\Controller\BaseController;
 

@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 
-namespace DocPHT\Lib;
+namespace App\Lib;
 
 use ParsedownCheckbox;
 use Emojione\Client;

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace DocPHT\Core\Http;
+namespace App\Core\Http;
 
 use Laminas\Session\Container;
 use Laminas\Session\SessionManager;

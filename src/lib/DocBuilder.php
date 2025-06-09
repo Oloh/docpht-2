@@ -11,7 +11,7 @@
  * file that was distributed with this source code.
  */
 
-namespace DocPHT\Lib;
+namespace App\Lib;
 
 use DocPHT\Model\PageModel;
 use Flasher\Prime\Flasher;

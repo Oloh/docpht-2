@@ -11,7 +11,7 @@
  * file that was distributed with this source code.
  */
 
-namespace DocPHT\Core;
+namespace App\Core;
 
 use Curl\Curl;
 

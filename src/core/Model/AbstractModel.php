@@ -1,6 +1,6 @@
 <?php
 
-namespace Instant\Core\Model;
+namespace App\Core\Model;
 
 abstract class AbstractModel
 {

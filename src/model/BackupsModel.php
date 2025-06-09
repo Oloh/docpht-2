@@ -12,7 +12,7 @@
  *
  *
  */
-namespace DocPHT\Model;
+namespace App\Model;
 
 use DocPHT\Model\VersionModel;
 use DocPHT\Lib\DocBuilder;

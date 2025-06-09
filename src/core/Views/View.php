@@ -10,7 +10,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Instant\Core\Views;
+namespace App\Core\Views;
 
 use DocPHT\Model\PageModel;
 use DocPHT\Model\AdminModel;

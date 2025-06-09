@@ -12,7 +12,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Instant\Core\Helper;
+namespace App\Core\Helper;
 
 class TextHelper 
 {

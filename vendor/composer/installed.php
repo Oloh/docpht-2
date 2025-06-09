@@ -3,7 +3,7 @@
         'name' => 'kenlog/docpht',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => '052b42a53baf973a87dbdda676f48670d59932a7',
+        'reference' => '5a252e523f99ce66b2653173e4fb5811ecef9b50',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -64,7 +64,7 @@
         'kenlog/docpht' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => '052b42a53baf973a87dbdda676f48670d59932a7',
+            'reference' => '5a252e523f99ce66b2653173e4fb5811ecef9b50',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

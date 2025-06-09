@@ -11,7 +11,7 @@
  * file that was distributed with this source code.
  */
 
-namespace DocPHT\Model;
+namespace App\Model;
 
 use Browser;
 use DocPHT\Core\Translator\T;

@@ -1,102 +1,92 @@
-<?php // ini_set('display_errors', 1); // IMPORTANT not to use in production
+<?php
 
-use Tracy\Debugger;
-use DocPHT\Core\Http\Session;
+declare(strict_types=1);
+
+use App\Core\Controller\ErrorPageController;
+use App\Core\NewAppVersion;
+use App\Core\translations\T;
+use App\lib\DocPHT;
+use App\Model\AccessLogModel;
+use App\Model\AdminModel;
+use App\Model\PageModel;
+use App\lib\DocBuilder;
 use Flasher\Prime\Flasher;
-use Flasher\Prime\Config\Config;
 use Flasher\Prime\Storage\StorageManager;
-use Flasher\Prime\Renderer\Renderer;
-use Flasher\Prime\Stamps\StampManager;
-use Flasher\Prime\Container\FlasherContainer;
+use Flasher\Prime\Config\Config;
+use Flasher\Prime\Response\Presenter\HtmlPresenter;
+use Nette\Application\Routers\Route;
+use Nette\Application\Routers\RouteList;
+use Nette\Bootstrap\Configurator;
+use Nette\Http\Session;
 
-/**
- * This file is part of the DocPHT project.
- * * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require __DIR__ . '/vendor/autoload.php';
+} else {
+    header('Content-Type: text/plain');
+    echo 'Missing vendor/autoload.php. Did you run "composer install"?';
+    exit(1);
+}
 
-$autoload = 'vendor/autoload.php';
+if (version_compare(phpversion(), '7.4.0', '<=')) {
+    echo T::js('This app required PHP 7.4 or newer.');
+    exit;
+}
 
-$constants = 'src/core/constants.php';
+if (file_exists(__DIR__ . '/src/config/config.php') && is_readable(__DIR__ . '/src/config/config.php')) {
+    require __DIR__ . '/src/config/config.php';
+} else {
+    $installDir = str_replace(
+        'index.php',
+        'temp/install',
+        (string)$_SERVER['SCRIPT_NAME']
+    );
+    header('Location: ' . $installDir);
+    exit;
+}
 
-$configurationFile = 'src/config/config.php';
+// Check if maintenance mode is defined and enabled
+if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE === true) {
+    $errorController = new ErrorPageController();
+    $errorController->serviceUnavailable();
+    exit;
+}
+$configurator = new Configurator();
 
-$installFolder = 'install';
+// Check if debug mode is defined and enabled
+$configurator->setDebugMode(defined('DEBUG_MODE') && DEBUG_MODE === true);
 
-if (file_exists($configurationFile) && file_exists($installFolder)) {
-    $files = glob($installFolder.'/partial/*');
-    foreach($files as $file){
-        if(is_file($file)) {
-            unlink($file);
-        }
-        if (is_dir_empty($installFolder.'/partial')) 
-            rmdir($installFolder.'/partial');
-    }
-    $files = glob($installFolder.'/*');
-    foreach($files as $file){
-        if(is_file($file)) {
-            unlink($file);
-        }
-        if (is_dir_empty($installFolder)) 
-            rmdir($installFolder);
-    }
-    if (file_exists($installFolder.'/partial') && file_exists($installFolder)) {
-        include 'install/error.php';
-    } else {
-        require $configurationFile;
-        header('Location:'.BASE_URL.'login');
-    }
-} elseif (!file_exists($configurationFile) && !file_exists($installFolder)) {
-    mkdir($installFolder, 0755, true);
-    mkdir($installFolder.'/partial', 0755, true);
-    $files = glob('temp/install/partial/*');
-    foreach($files as $file){
-        if(is_file($file)) {
-            error_log($file,0);
-            copy($file, $installFolder . "/partial/" . pathinfo($file,PATHINFO_BASENAME));
-        }
-    }
-    $files = glob('temp/install/*');
-    foreach($files as $file){
-        if(is_file($file)) {
-            copy($file, $installFolder . "/" . pathinfo($file,PATHINFO_BASENAME));
-        }
-    }       
-    include 'install/config.php';
-} elseif (!file_exists($configurationFile)) {
-    include 'install/config.php';
-} elseif (file_exists($autoload)) {
-    require $autoload;
+$configurator->enableTracy(__DIR__ . '/log');
+$configurator->setTempDirectory(__DIR__ . '/temp');
+$configurator->addConfig(__DIR__ . '/src/config/nette.neon');
 
-    // Correctly initialize Flasher
-    $config = new Config();
-    $storageManager = new StorageManager();
-    $renderer = new Renderer($storageManager, $config);
-    $stampManager = new StampManager();
-    $flasher = new Flasher($config, $storageManager, $renderer, $stampManager);
-    FlasherContainer::setContainer($flasher);
+$container = $configurator->createContainer();
+$application = $container->getByType('Nette\Application\Application');
 
-    $sessions = new DocPHT\Core\Http\Session;
+$router = new RouteList();
 
-    require $constants;
-    require $configurationFile;
-
-    // Debugger::enable(Debugger::DEVELOPMENT); // IMPORTANT not to use in production
-
-    $loader = new Nette\Loaders\RobotLoader;
-    $loader->addDirectory(__DIR__ . '/src');
-    $loader->setTempDirectory(__DIR__ . '/temp');
-    $loader->register();
-
+if (file_exists(__DIR__ . '/src/route.php') && is_readable(__DIR__ . '/src/route.php')) {
     require_once __DIR__ . '/src/route.php';
+}
+$application->getRouter(new RouteList());
 
+$session = new Session($application->getHttpRequest(), $application->getHttpResponse());
+
+$storageManager = new StorageManager($session);
+$config = new Config(require __DIR__ . '/src/config/flasher.php');
+$renderer = new HtmlPresenter($storageManager, $config->all());
+
+
+$docpht = new DocPHT(
+    VERSION,
+    new AccessLogModel(),
+    new DocBuilder($session),
+    new PageModel($session),
+    new AdminModel()
+);
+
+// Check if new version check is defined and enabled
+if (defined('CHECK_NEW_VERSION') && CHECK_NEW_VERSION === true) {
+    new NewAppVersion($docpht, $session);
 }
 
-function is_dir_empty($dir) 
-{
-    if (!is_readable($dir)) return NULL; 
-    return (count(scandir($dir)) == 2);
-}
+$application->run();

@@ -1,6 +1,6 @@
 <?php
 
-namespace Instant\Core\Controller;
+namespace App\Core\Controller;
 
 use DocPHT\Form\LoginForm;
 use DocPHT\Form\SearchForm;

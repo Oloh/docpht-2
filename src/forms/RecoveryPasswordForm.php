@@ -11,7 +11,7 @@
  * file that was distributed with this source code.
  */
 
-namespace DocPHT\Form;
+namespace App\Forms;
 
 use DocPHT\Core\Translator\T;
 use Nette\Forms\Form;
