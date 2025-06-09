@@ -24,36 +24,45 @@ final class Describer
 	// Number.MAX_SAFE_INTEGER
 	private const JsSafeInteger = 1 << 53 - 1;
 
-	public int $maxDepth = 7;
-	public int $maxLength = 150;
-	public int $maxItems = 100;
+	/** @var int */
+	public $maxDepth = 7;
+
+	/** @var int */
+	public $maxLength = 150;
+
+	/** @var int */
+	public $maxItems = 100;
 
 	/** @var Value[] */
-	public array $snapshot = [];
-	public bool $debugInfo = false;
-	public array $keysToHide = [];
+	public $snapshot = [];
 
-	/** @var (callable(string, mixed): bool)|null */
+	/** @var bool */
+	public $debugInfo = false;
+
+	/** @var array */
+	public $keysToHide = [];
+
+	/** @var callable|null  fn(string $key, mixed $val): bool */
 	public $scrubber;
 
-	public bool $location = false;
+	/** @var bool */
+	public $location = false;
 
-	/** @var array<string, callable(resource): array> */
-	public array $resourceExposers = [];
+	/** @var callable[] */
+	public $resourceExposers;
 
-	/** @var array<string, callable(object, Value, self): ?array> */
-	public array $objectExposers = [];
-
-	/** @var array<string, array{bool, string[]}> */
-	public array $enumProperties = [];
+	/** @var array<string,callable> */
+	public $objectExposers;
 
 	/** @var (int|\stdClass)[] */
-	public array $references = [];
+	public $references = [];
 
 
-	public function describe(mixed $var): \stdClass
+	public function describe($var): \stdClass
 	{
-		uksort($this->objectExposers, fn($a, $b): int => $b === '' || (class_exists($a, false) && is_subclass_of($a, $b)) ? -1 : 1);
+		uksort($this->objectExposers, function ($a, $b): int {
+			return $b === '' || (class_exists($a, false) && is_subclass_of($a, $b)) ? -1 : 1;
+		});
 
 		try {
 			return (object) [
@@ -70,7 +79,10 @@ final class Describer
 	}
 
 
-	private function describeVar(mixed $var, int $depth = 0, ?int $refId = null): mixed
+	/**
+	 * @return mixed
+	 */
+	private function describeVar($var, int $depth = 0, ?int $refId = null)
 	{
 		if ($var === null || is_bool($var)) {
 			return $var;
@@ -81,7 +93,10 @@ final class Describer
 	}
 
 
-	private function describeInteger(int $num): Value|int
+	/**
+	 * @return Value|int
+	 */
+	private function describeInteger(int $num)
 	{
 		return $num <= self::JsSafeInteger && $num >= -self::JsSafeInteger
 			? $num
@@ -89,7 +104,10 @@ final class Describer
 	}
 
 
-	private function describeDouble(float $num): Value|float
+	/**
+	 * @return Value|float
+	 */
+	private function describeDouble(float $num)
 	{
 		if (!is_finite($num)) {
 			return new Value(Value::TypeNumber, (string) $num);
@@ -102,7 +120,10 @@ final class Describer
 	}
 
 
-	private function describeString(string $s, int $depth = 0): Value|string
+	/**
+	 * @return Value|string
+	 */
+	private function describeString(string $s, int $depth = 0)
 	{
 		$encoded = Helpers::encodeString($s, $depth ? $this->maxLength : null);
 		if ($encoded === $s) {
@@ -115,7 +136,10 @@ final class Describer
 	}
 
 
-	private function describeArray(array $arr, int $depth = 0, ?int $refId = null): Value|array
+	/**
+	 * @return Value|array
+	 */
+	private function describeArray(array $arr, int $depth = 0, ?int $refId = null)
 	{
 		if ($refId) {
 			$res = new Value(Value::TypeRef, 'p' . $refId);
@@ -132,7 +156,7 @@ final class Describer
 				return $res;
 			} elseif ($depth && $this->maxItems && count($arr) > $this->maxItems) {
 				$value->length = count($arr);
-				$arr = array_slice($arr, 0, $this->maxItems, preserve_keys: true);
+				$arr = array_slice($arr, 0, $this->maxItems, true);
 			}
 
 			$items = &$value->items;
@@ -144,7 +168,7 @@ final class Describer
 			$res = new Value(Value::TypeArray, null, count($arr));
 			$res->depth = $depth;
 			$items = &$res->items;
-			$arr = array_slice($arr, 0, $this->maxItems, preserve_keys: true);
+			$arr = array_slice($arr, 0, $this->maxItems, true);
 		}
 
 		$items = [];
@@ -170,7 +194,7 @@ final class Describer
 			return new Value(Value::TypeRef, $id);
 		}
 
-		$value = new Value(Value::TypeObject, get_debug_type($obj));
+		$value = new Value(Value::TypeObject, Helpers::getClass($obj));
 		$value->id = $id;
 		$value->depth = $depth;
 		$value->holder = $obj; // to be not released by garbage collector in collecting mode
@@ -219,7 +243,10 @@ final class Describer
 	}
 
 
-	public function describeKey(string $key): Value|string
+	/**
+	 * @return Value|string
+	 */
+	public function describeKey(string $key)
 	{
 		if (preg_match('#^[\w!\#$%&*+./;<>?@^{|}~-]{1,50}$#D', $key) && !preg_match('#^(true|false|null)$#iD', $key)) {
 			return $key;
@@ -235,24 +262,22 @@ final class Describer
 	public function addPropertyTo(
 		Value $value,
 		string $k,
-		mixed $v,
-		int $type = Value::PropertyVirtual,
+		$v,
+		$type = Value::PropertyVirtual,
 		?int $refId = null,
-		?string $class = null,
-		?Value $described = null,
-	): void
-	{
+		?string $class = null
+	) {
 		if ($value->depth && $this->maxItems && count($value->items ?? []) >= $this->maxItems) {
 			$value->length = ($value->length ?? count($value->items)) + 1;
 			return;
 		}
 
-		$class ??= $value->value;
+		$class = $class ?? $value->value;
 		$value->items[] = [
 			$this->describeKey($k),
 			$type !== Value::PropertyVirtual && $this->isSensitive($k, $v, $class)
 				? new Value(Value::TypeText, self::hideValue($v))
-				: ($described ?? $this->describeVar($v, $value->depth + 1, $refId)),
+				: $this->describeVar($v, $value->depth + 1, $refId),
 			$type === Value::PropertyPrivate ? $class : $type,
 		] + ($refId ? [3 => $refId] : []);
 	}
@@ -275,7 +300,7 @@ final class Describer
 	}
 
 
-	private function isSensitive(string $key, mixed $val, ?string $class = null): bool
+	private function isSensitive(string $key, $val, ?string $class = null): bool
 	{
 		return $val instanceof \SensitiveParameterValue
 			|| ($this->scrubber !== null && ($this->scrubber)($key, $val, $class))
@@ -284,36 +309,47 @@ final class Describer
 	}
 
 
-	private static function hideValue(mixed $val): string
+	private static function hideValue($val): string
 	{
 		if ($val instanceof \SensitiveParameterValue) {
 			$val = $val->getValue();
 		}
 
-		return self::HiddenValue . ' (' . get_debug_type($val) . ')';
+		return self::HiddenValue . ' (' . (is_object($val) ? Helpers::getClass($val) : gettype($val)) . ')';
 	}
 
 
-	public function describeEnumProperty(string $class, string $property, mixed $value): ?Value
+	public function getReferenceId($arr, $key): ?int
 	{
-		[$set, $constants] = $this->enumProperties["$class::$property"] ?? null;
-		if (!is_int($value)
-			|| !$constants
-			|| !($constants = Helpers::decomposeFlags($value, $set, $constants))
-		) {
+		if (PHP_VERSION_ID >= 70400) {
+			if ((!$rr = \ReflectionReference::fromArrayElement($arr, $key))) {
+				return null;
+			}
+
+			$tmp = &$this->references[$rr->getId()];
+			if ($tmp === null) {
+				return $tmp = count($this->references);
+			}
+
+			return $tmp;
+		}
+
+		$uniq = new \stdClass;
+		$copy = $arr;
+		$orig = $copy[$key];
+		$copy[$key] = $uniq;
+		if ($arr[$key] !== $uniq) {
 			return null;
 		}
 
-		$constants = array_map(fn(string $const): string => str_replace("$class::", 'self::', $const), $constants);
-		return new Value(Value::TypeNumber, implode(' | ', $constants) . " ($value)");
-	}
+		$res = array_search($uniq, $this->references, true);
+		$copy[$key] = $orig;
+		if ($res === false) {
+			$this->references[] = &$arr[$key];
+			return count($this->references);
+		}
 
-
-	public function getReferenceId(array $arr, string|int $key): ?int
-	{
-		return ($rr = \ReflectionReference::fromArrayElement($arr, $key))
-			? ($this->references[$rr->getId()] ??= count($this->references) + 1)
-			: null;
+		return $res + 1;
 	}
 
 
@@ -338,7 +374,7 @@ final class Describer
 						$location = $item;
 						continue;
 					}
-				} catch (\ReflectionException) {
+				} catch (\ReflectionException $e) {
 				}
 			}
 

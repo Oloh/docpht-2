@@ -51,10 +51,6 @@
     <div id="content">
     <div class="container-fluid">
         
-    <?php
-        // The $msg object is now available directly.
-        // We check for messages first, then display them once.
-        if ($msg && $msg->hasMessages()) {
-            echo $msg->display();
-        }
-    ?>
+    <?php if($this->msg->display()) : ?>
+        <?php echo $this->msg->display(); ?>
+    <?php endif; ?>

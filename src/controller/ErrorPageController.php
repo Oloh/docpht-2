@@ -14,7 +14,7 @@
 namespace DocPHT\Controller;
 
 use DocPHT\Core\Translator\T;
-use DocPHT\core\Controller\BaseController;
+use Instant\Core\Controller\BaseController;
 
 class ErrorPageController extends BaseController
 { 

@@ -1,96 +1,61 @@
 <?php
 
-namespace DocPHT\Core\Http;
+/**
+ * This file is part of the DocPHT project.
+ * 
+ * @author Valentino Pesce
+ * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
+ * @copyright (c) Craig Crosby <creecros@gmail.com>
+ * 
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
 
-use Symfony\Component\HttpFoundation\Session\Session as SymfonySession;
-use Symfony\Component\HttpFoundation\Session\Storage\NativeSessionStorage;
-use Symfony\Component\HttpFoundation\Session\Attribute\AttributeBag;
+namespace DocPHT\Core\Session;
 
 class Session
 {
-    private SymfonySession $session;
-
     public function __construct()
     {
-        // This creates a new session object using Symfony's secure, native session handling.
-        $storage = new NativeSessionStorage();
-        $this->session = new SymfonySession($storage, new AttributeBag());
-        $this->start();
-    }
-
-    /**
-     * Starts the session.
-     */
-    public function start(): bool
-    {
-        if ($this->isStarted()) {
-            return true;
+        if(session_status() === PHP_SESSION_NONE) {
+            ini_set('session.cookie_httponly', 1); // XSS attack protection
+            ini_set('session.use_strict_mode', 1); // Prevents an attack that forces users to use a known session ID
+            // Set an additional entropy
+            ini_set('session.entropy_file', '/dev/urandom');
+            ini_set('session.entropy_length', '256');
+            session_name('ID'); 
+            session_start();
         }
-        return $this->session->start();
     }
 
-    /**
-     * Checks if the session is started.
-     */
-    public function isStarted(): bool
+    public function sessionExpiration()
     {
-        return $this->session->isStarted();
+        $expireAfter = 30; // session life time expressed in minutes
+
+        if(isset($_SESSION['last_action'])){
+
+            $secondsInactive = time() - $_SESSION['last_action'];
+            
+            $expireAfterSeconds = $expireAfter * 60;
+            
+            if($secondsInactive >= $expireAfterSeconds){
+                session_unset();
+                session_destroy();
+            }
+        }
+
+        $_SESSION['last_action'] = time();
     }
 
-    /**
-     * Sets a session variable.
-     */
-    public function set(string $name, $value): void
+    public function preventStealingSession()
     {
-        $this->session->set($name, $value);
-    }
-
-    /**
-     * Gets a session variable.
-     */
-    public function get(string $name, $default = null)
-    {
-        return $this->session->get($name, $default);
-    }
-
-    /**
-     * Checks if a session variable is set.
-     */
-    public function has(string $name): bool
-    {
-        return $this->session->has($name);
-    }
-
-    /**
-     * Removes a session variable.
-     */
-    public function remove(string $name): void
-    {
-        $this->session->remove($name);
-    }
-
-    /**
-     * Returns a "flash" message for the next request.
-     */
-    public function pull(string $name, $default = null)
-    {
-        return $this->session->getFlashBag()->get($name, $default);
-    }
-
-    /**
-     * Regenerates the session ID.
-     */
-    public function regenerate(bool $destroy = false, ?int $lifetime = null): bool
-    {
-        return $this->session->migrate($destroy, $lifetime);
-    }
-
-    /**
-     * Destroys the session.
-     */
-    public function destroy(): bool
-    {
-        $this->session->invalidate();
-        return !$this->isStarted();
+        // Interesting stuff 
+        // Prevent malicious users from stealing sessions
+        if (isset($_SESSION['PREV_USERAGENT'])) {
+            if ($_SERVER['HTTP_USER_AGENT'] != $_SESSION['PREV_USERAGENT']) {
+                session_unset();
+                session_destroy();
+            }
+        }
     }
 }

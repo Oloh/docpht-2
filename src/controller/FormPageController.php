@@ -13,7 +13,7 @@
 
 namespace DocPHT\Controller;
 
-use DocPHT\core\Controller\BaseController;
+use Instant\Core\Controller\BaseController;
 
 class FormPageController extends BaseController
 {
