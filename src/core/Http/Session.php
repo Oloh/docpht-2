@@ -1,6 +1,6 @@
 <?php
 
-namespace DocPHT\core\Http;
+namespace DocPHT\Core\Http;
 
 use Symfony\Component\HttpFoundation\Session\Session as SymfonySession;
 use Symfony\Component\HttpFoundation\Session\Storage\NativeSessionStorage;

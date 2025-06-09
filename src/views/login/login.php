@@ -1,7 +1,11 @@
 <div class="container-fluid mt-3">
-    <?php if($this->msg->display()) : ?>
-        <?php echo $this->msg->display(); ?>
-    <?php endif; ?>
+<?php
+    // The $msg object is now available directly from the BaseController.
+    // We check if there are messages, then display them once.
+    if ($msg && $msg->hasMessages()) {
+        echo $msg->display();
+    }
+?>
 </div>
 <div class="login-container text-center">
         <?php 

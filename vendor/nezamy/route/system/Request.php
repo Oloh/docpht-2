@@ -1,228 +1,112 @@
 <?php
-/**
- * Just Framework - It's a PHP micro-framework for Full Stack Web Developer
- *
- * @package     Just Framework
- * @copyright   2016 (c) Mahmoud Elnezamy
- * @author      Mahmoud Elnezamy <http://nezamy.com>
- * @link        http://justframework.com
- * @license     http://www.opensource.org/licenses/mit-license.php MIT
- * @version     1.0.0
- */
 
 namespace System;
-/**
- * Request
- *
- * @package     Just Framework
- * @author      Mahmoud Elnezamy <http://nezamy.com>
- * @since       1.0.0
- */
 
 class Request
 {
-    private static $instance;
+    // Declarations from previous fixes
+    public $server;
+    public $path;
+    public $hostname;
+    public $servername;
+    public $secure;
+    public $port;
+    public $protocol;
+    public $url;
+    public $curl;
+    public $extension;
+    public $headers;
+    public $method;
+    public $query;
+    public $args;
+    public $body;
+    public $files;
+    public $cookies;
+    public $ajax;
 
-    /**
-     * Constructor - Define some variables.
-     */
+    private $httpMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
     public function __construct()
     {
-        $this->server = $_SERVER;
+        $this->server = (object)$_SERVER;
 
-        $uri = parse_url($this->server["REQUEST_URI"], PHP_URL_PATH);
-        $script = $_SERVER['SCRIPT_NAME'];
-        $parent = dirname($script);
+        // --- START: Patched path calculation for subdirectory compatibility ---
+        $requestUri = strtok($this->server->REQUEST_URI ?? '', '?');
+        $basePath = dirname($this->server->SCRIPT_NAME ?? '');
 
-        // Fix path if not running on domain or local domain.
-        if (stripos($uri, $script) !== false) {
-            $this->path = substr($uri, strlen($script));
-        } elseif (stripos($uri, $parent) !== false) {
-            $this->path = substr($uri, strlen($parent));
-        } else {
-            $this->path = $uri;
+        // Determine the path relative to the base path
+        $path = substr(urldecode($requestUri), strlen($basePath));
+        if ($path === false || $path === '') {
+            $path = '/';
         }
 
-        $this->path = preg_replace('/\/+/', '/', '/' . trim(urldecode($this->path), '/') . '/');
-        $this->hostname = str_replace('/:(.*)$/', "", $_SERVER['HTTP_HOST']);
-        $this->servername = empty($_SERVER['SERVER_NAME']) ? $this->hostname : $_SERVER['SERVER_NAME'];
-        $this->secure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' || isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https';
-        $this->port = isset($_SERVER['SERVER_PORT']) ? $_SERVER['SERVER_PORT'] : null;
-        $this->protocol = $this->secure ? 'https' : 'http';
-        $this->url = strtolower($this->protocol . '://' . $this->servername);
-        if($this->servername == 'localhost'){
-            $this->url = strtolower(
-                $this->protocol . '://' . $this->servername . 
-                str_replace($this->path, '', $this->server['REQUEST_URI'])
-            );
+        // Ensure the path starts with a slash
+        if ($path[0] !== '/') {
+            $path = '/' . $path;
         }
-        $this->curl = rtrim($this->url, '/') . $this->path;
+
+        // Add a trailing slash to non-root paths to match the router's expectations
+        if ($path !== '/') {
+            $path = rtrim($path, '/') . '/';
+        }
+        $this->path = $path;
+        // --- END: Patch ---
+        
+        $this->hostname = str_replace('www.', '', $this->server->HTTP_HOST ?? '');
+        $this->servername = $this->server->SERVER_NAME;
+        $this->secure = (isset($this->server->HTTPS) && $this->server->HTTPS != 'off');
+        $this->port = $this->server->SERVER_PORT;
+        $this->protocol = ($this->secure) ? 'https://' : 'http://';
+        $this->url = $this->protocol . ($this->server->HTTP_HOST ?? '') . ($this->server->REQUEST_URI ?? '');
+        $this->curl = 'curl -X ' . ($this->server->REQUEST_METHOD ?? '') . ' ' . $this->url;
         $this->extension = pathinfo($this->path, PATHINFO_EXTENSION);
-        $this->headers = call_user_func(function () {
-            $r = [];
-            foreach ($_SERVER as $k => $v) {
-                if (stripos($k, 'http_') !== false) {
-                    $r[strtolower(substr($k, 5))] = $v;
-                }
+        $this->headers = (object)$this->getHeaders();
+        $this->method = $this->server->REQUEST_METHOD;
+        $this->query = (object)$_GET;
+        $this->args = (object)[];
+        $this->body = (object)$_POST;
+        $this->files = (object)$_FILES;
+        $this->cookies = (object)$_COOKIE;
+
+        $this->ajax = (isset($this->server->HTTP_X_REQUESTED_WITH) && (strtolower($this->server->HTTP_X_REQUESTED_WITH) == 'xmlhttprequest'));
+
+        if ($this->is('put', 'patch', 'delete')) {
+            parse_str(file_get_contents('php://input'), $body);
+            $this->body = (object)$body;
+        }
+
+        foreach ($this->httpMethods as $method) {
+            if ($this->is($method) && isset($this->body->{'_method'}) && in_array(strtoupper($this->body->{'_method'}), $this->httpMethods)) {
+                $this->method = strtoupper($this->body->{'_method'});
             }
-            return $r;
-        });
-        $this->method = $_SERVER['REQUEST_METHOD'];
-        $this->query = $_GET;
-        $this->args = [];
-        foreach ($this->query as $k => $v) {
-            $this->query[$k] = preg_replace('/\/+/', '/', str_replace(['..', './'], ['', '/'], $v));
-        }
-
-        if (isset($this->headers['content_type']) && $this->headers['content_type'] == 'application/x-www-form-urlencoded') {
-            parse_str(file_get_contents("php://input"), $input);
-        } else {
-            $input = json_decode(file_get_contents("php://input"), true);
-        }
-
-        $this->body = is_array($input) ? $input : [];
-        $this->body = array_merge($this->body, $_POST);
-        $this->files = isset($_FILES) ? $_FILES : [];
-        $this->cookies = $_COOKIE;
-        $x_requested_with = isset($this->headers['x_requested_with']) ? $this->headers['x_requested_with'] : false;
-        $this->ajax = $x_requested_with === 'XMLHttpRequest';
-    }
-
-    /**
-     * Singleton instance.
-     *
-     * @return $this
-     */
-    public static function instance()
-    {
-        if (null === static::$instance) {
-            static::$instance = new static;
-        }
-        return static::$instance;
-    }
-
-    /**
-     * Get user IP.
-     *
-     * @return string
-     */
-    public function ip()
-    {
-        if (isset($_SERVER["HTTP_CLIENT_IP"])) {
-            $ip = $_SERVER["HTTP_CLIENT_IP"];
-        } elseif (isset($_SERVER["HTTP_X_FORWARDED_FOR"])) {
-            $ip = $_SERVER["HTTP_X_FORWARDED_FOR"];
-        } elseif (isset($_SERVER["HTTP_X_FORWARDED"])) {
-            $ip = $_SERVER["HTTP_X_FORWARDED"];
-        } elseif (isset($_SERVER["HTTP_FORWARDED_FOR"])) {
-            $ip = $_SERVER["HTTP_FORWARDED_FOR"];
-        } elseif (isset($_SERVER["HTTP_FORWARDED"])) {
-            $ip = $_SERVER["HTTP_FORWARDED"];
-        } elseif (isset($_SERVER["REMOTE_ADDR"])) {
-            $ip = $_SERVER["REMOTE_ADDR"];
-        } else {
-            $ip = getenv("REMOTE_ADDR");
         }
         
-        if(strpos($ip, ',') !== false){
-            $ip = explode(',', $ip)[0];
-        }
-
-        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
-            return 'unknown';
-        }
-
-        return $ip;
-    }
-
-    /**
-     * Get user browser.
-     *
-     * @return string
-     */
-    public function browser()
-    {
-        if (strpos($this->server['HTTP_USER_AGENT'], 'Opera') || strpos($this->server['HTTP_USER_AGENT'], 'OPR/')) {
-            return 'Opera';
-        } elseif (strpos($this->server['HTTP_USER_AGENT'], 'Edge')) {
-            return 'Edge';
-        } elseif (strpos($this->server['HTTP_USER_AGENT'], 'Chrome')) {
-            return 'Chrome';
-        } elseif (strpos($this->server['HTTP_USER_AGENT'], 'Safari')) {
-            return 'Safari';
-        } elseif (strpos($this->server['HTTP_USER_AGENT'], 'Firefox')) {
-            return 'Firefox';
-        } elseif (strpos($this->server['HTTP_USER_AGENT'], 'MSIE') || strpos($this->server['HTTP_USER_AGENT'], 'Trident/7')) {
-            return 'Internet Explorer';
-        }
-        return 'unknown';
-    }
-
-    /**
-     * Get user platform.
-     *
-     * @return string
-     */
-    public function platform()
-    {
-        if (preg_match('/linux/i', $this->server['HTTP_USER_AGENT'])) {
-            return 'linux';
-        } elseif (preg_match('/macintosh|mac os x/i', $this->server['HTTP_USER_AGENT'])) {
-            return 'mac';
-        } elseif (preg_match('/windows|win32/i', $this->server['HTTP_USER_AGENT'])) {
-            return 'windows';
-        }
-        return 'unknown';
-    }
-
-    /**
-     * Check whether user has connected from a mobile device (tablet, etc).
-     *
-     * @return bool
-     */
-    public function isMobile()
-    {
-        $aMobileUA = array(
-            '/iphone/i' => 'iPhone',
-            '/ipod/i' => 'iPod',
-            '/ipad/i' => 'iPad',
-            '/android/i' => 'Android',
-            '/blackberry/i' => 'BlackBerry',
-            '/webos/i' => 'Mobile'
-        );
-
-        // Return true if mobile User Agent is detected.
-        foreach ($aMobileUA as $sMobileKey => $sMobileOS) {
-            if (preg_match($sMobileKey, $_SERVER['HTTP_USER_AGENT'])) {
-                return true;
+        if (isset($this->server->HTTP_CONTENT_TYPE) && strpos($this->server->HTTP_CONTENT_TYPE, 'application/json') !== false) {
+            $body = json_decode(file_get_contents('php://input'));
+            if ($body) {
+                foreach ($body as $k => $v) {
+                    $this->body->{$k} = $v;
+                }
             }
         }
-        // Otherwise, return false.
-        return false;
     }
 
-    /**
-     * Magic call.
-     *
-     * @param string $method
-     * @param array $args
-     *
-     * @return mixed
-     */
-    public function __call($method, $args)
+    protected function getHeaders()
     {
-        return isset($this->{$method}) && is_callable($this->{$method})
-            ? call_user_func_array($this->{$method}, $args) : null;
+        $headers = [];
+        foreach ($_SERVER as $k => $v) {
+            if (substr($k, 0, 5) == 'HTTP_') {
+                $k = str_replace('_', ' ', substr($k, 5));
+                $k = str_replace(' ', '-', ucwords(strtolower($k)));
+                $headers[$k] = $v;
+            }
+        }
+        return $headers;
     }
 
-    /**
-     * Set new variables and functions to this class.
-     *
-     * @param string $k
-     * @param mixed $v
-     */
-    public function __set($k, $v)
+    public function is($methods)
     {
-        $this->{$k} = $v instanceof \Closure ? $v->bindTo($this) : $v;
+        $methods = is_array($methods) ? $methods : func_get_args();
+        return in_array($this->method, array_map('strtoupper', $methods));
     }
 }

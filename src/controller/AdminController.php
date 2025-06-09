@@ -1,22 +1,47 @@
 <?php
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
-
 namespace DocPHT\Controller;
 
-use Instant\Core\Controller\BaseController;
+use DocPHT\Core\Controller\BaseController;
+use DocPHT\Core\Http\Session;
+use DocPHT\Core\NewAppVersion;
+use DocPHT\Form\AddUserForm;
+use DocPHT\Form\BackupsForms;
+use DocPHT\Form\RemoveUserForm;
+use DocPHT\Form\TranslationsForm;
+use DocPHT\Form\UpdateEmailForm;
+use DocPHT\Form\UpdatePasswordForm;
+use DocPHT\Form\UploadLogoForm;
+use DocPHT\Model\AccessLogModel;
+use System\Request;
 
 class AdminController extends BaseController
 {
+    private object $newAppVersion;
+    private object $updatePasswordForm;
+    private object $updateEmailForm;
+    private object $removeUserForm;
+    private object $addUserForm;
+    private object $backupsForms;
+    private object $translationsForm;
+    private object $uploadLogoForm;
+    private object $accessLogModel;
+
+    public function __construct(Session $session, Request $request)
+    {
+        parent::__construct($session, $request);
+
+        // Instantiate all dependencies
+        $this->newAppVersion = new NewAppVersion();
+        $this->updatePasswordForm = new UpdatePasswordForm($this);
+        $this->updateEmailForm = new UpdateEmailForm($this);
+        $this->removeUserForm = new RemoveUserForm($this);
+        $this->addUserForm = new AddUserForm($this);
+        $this->backupsForms = new BackupsForms($this);
+        $this->translationsForm = new TranslationsForm($this);
+        $this->uploadLogoForm = new UploadLogoForm($this);
+        $this->accessLogModel = new AccessLogModel();
+    }
 
 	public function settings()
 	{
@@ -55,7 +80,7 @@ class AdminController extends BaseController
 
 	public function saveBackup()
 	{
-		$form = $this->backupsForms->save();
+		$this->backupsForms->save();
 	}
 
 	public function restoreOptions()
@@ -73,12 +98,12 @@ class AdminController extends BaseController
 
 	public function exportBackup()
 	{
-		$form = $this->backupsForms->export();
+		$this->backupsForms->export();
 	}
 
 	public function deleteBackup()
 	{
-		$form = $this->backupsForms->delete();
+		$this->backupsForms->delete();
 	}
 
 	public function translations()
@@ -89,8 +114,8 @@ class AdminController extends BaseController
 
 	public function uploadLogo()
 	{
-		$logoForm = $this->uploadlogo->logo();
-		$favForm = $this->uploadlogo->favicon();
+		$logoForm = $this->uploadLogoForm->logo();
+		$favForm = $this->uploadLogoForm->favicon();
 		
 		$this->view->load('Add logo','admin/upload_logo.php', [
 			'logoForm' => $logoForm,
@@ -100,15 +125,19 @@ class AdminController extends BaseController
 
 	public function removeLogo()
 	{
-		unlink('data/logo.png');
-		header('Location:'.BASE_URL.'admin');
+        if (file_exists('data/logo.png')) {
+		    unlink('data/logo.png');
+        }
+		header('Location: ' . BASE_URL . 'admin/settings');
 		exit;
 	}
 
 	public function removeFav()
 	{
-		unlink('data/favicon.png');
-		header('Location:'.BASE_URL.'admin');
+        if (file_exists('data/favicon.png')) {
+		    unlink('data/favicon.png');
+        }
+		header('Location: ' . BASE_URL . 'admin/settings');
 		exit;
 	}
 
@@ -117,5 +146,4 @@ class AdminController extends BaseController
 		$userList = $this->accessLogModel->getUserList();
 		$this->view->load('Last logins','admin/last_login.php', ['userList' => $userList]);
 	}
-
 }

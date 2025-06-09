@@ -1,109 +1,153 @@
 <?php
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
-
 namespace DocPHT\Controller;
 
-use DocPHT\Core\Translator\T;
-use Instant\Core\Controller\BaseController;
+use DocPHT\Core\Controller\BaseController;
+use DocPHT\Core\Http\Session;
+use DocPHT\Form\LoginForm;
+use DocPHT\Form\LostPasswordForm;
+use DocPHT\Form\RecoveryPasswordForm;
+use DocPHT\Model\AccessLogModel;
+use DocPHT\Model\AdminModel;
+use Nette\Forms\Form;
+use Nette\Mail\Message;
+use System\Request;
 
 class LoginController extends BaseController
 {
+    private object $adminModel;
+    private object $accessLogModel;
+
+    public function __construct(Session $session, Request $request)
+    {
+        parent::__construct($session, $request);
+        $this->adminModel = new AdminModel();
+        $this->accessLogModel = new AccessLogModel();
+    }
     
     public function login()
     {
-        if (isset($_SESSION['Active'])) {
-            header("Location:".BASE_URL);
+        if ($this->session->get('Active')) {
+            header("Location: " . BASE_URL);
             exit;
         }
 
-        $form = $this->loginForm->create();
-        $this->view->show('login/partial/head.php', ['PageTitle' => T::trans('Login')]);
-        $this->view->show('login/login.php', ['form' => $form]);
-        $this->view->show('login/partial/footer.php');
+        $loginForm = new LoginForm();
+        $form = $loginForm->create();
+        $form->onSuccess[] = [$this, 'loginFormSucceeded'];
+
+        $this->view->load('Login', 'login/login.php', ['form' => $form]);
     }
 
-    public function checkLogin(string $username, string $password)
+    public function loginFormSucceeded(Form $form, \stdClass $values): void
     {
-        $username = $this->usernameFilter($username);
-        $password = $this->passwordFilter($password);
-        
-        $userExists = $this->adminModel->userExists($username);
-        
-        if ($userExists) {
+        $isLoggedIn = $this->checkLogin($values->username, $values->password);
 
-            $users = $this->adminModel->getUsers();
-            foreach ($users as $user) {
-
-                $checkUser = $username === $user['Username'];
-                $checkPassowrd = password_verify($password, $user['Password']);
-
-                if ($checkUser && $checkPassowrd === true) {
-                    session_regenerate_id(true);
-                    $_SESSION['PREV_USERAGENT'] = $_SERVER['HTTP_USER_AGENT'];
-                    $_SESSION['Username'] = $username;
-                    $_SESSION['Active'] = true;
-                    $accesslog = $this->accessLogModel->create($username);
-                    return true;
-                } elseif($checkUser && $checkPassowrd === false) {
-                    $accesslog = $this->accessLogModel->create($username);
-                    return false;
-                }
-            }
+        if ($isLoggedIn) {
+            $this->msg->success('Welcome back!');
+            header('Location: ' . BASE_URL);
+            exit;
+        } else {
+            $this->msg->error('Invalid username or password.');
+            header('Location: ' . BASE_URL . 'login');
+            exit;
         }
     }
 
-    public function usernameFilter($username) 
+    public function checkLogin(string $username, string $password): bool
     {
-        $username = trim($username);
-        $username = stripslashes($username);
-        $username = strip_tags($username);
-        $username = filter_var($username, FILTER_SANITIZE_EMAIL);
-        $username = filter_var($username, FILTER_VALIDATE_EMAIL);
-        return $username;
-    }
+        $user = $this->adminModel->getUserByUsername($username);
+        
+        if ($user && password_verify($password, $user['Password'])) {
+            session_regenerate_id(true);
+            $this->session->set('Username', $user['Username']);
+            $this->session->set('Active', true);
+            $this->accessLogModel->create($username);
+            return true;
+        }
 
-    public function passwordFilter($password) 
-    {
-        $password = trim($password);
-        $password = stripslashes($password);
-        $password = strip_tags($password);
-        $password = filter_var($password, FILTER_SANITIZE_STRING);
-        return $password;
+        if ($user) {
+            $this->accessLogModel->create($username, 'failed_login');
+        }
+        return false;
     }
 
     public function logout()
     { 
-        session_unset();
-        session_destroy();
-      
-        header("Location:".BASE_URL);
+        $this->session->destroy();
+        header("Location: " . BASE_URL);
         exit;
     }
 
     public function lostPassword()
     {
-        $form = $this->lostPassword->sendEmail();
-        
-        $this->view->show('login/partial/head.php', ['PageTitle' => T::trans('Lost password')]);
-        $this->view->show('login/lost_password.php', ['form' => $form]);
-        $this->view->show('login/partial/footer.php');
+        $lostPasswordForm = new LostPasswordForm();
+        $form = $lostPasswordForm->create();
+        $form->onSuccess[] = [$this, 'lostPasswordFormSucceeded'];
+        $this->view->load('Lost Password', 'login/lost_password.php', ['form' => $form]);
+    }
+
+    public function lostPasswordFormSucceeded(Form $form, \stdClass $values): void
+    {
+        $user = $this->adminModel->getUserByUsername($values->username);
+        if (!$user) {
+            $this->msg->error('No user found with that email address.');
+            header('Location: ' . BASE_URL . 'lost-password');
+            exit;
+        }
+
+        $token = bin2hex(random_bytes(32));
+        $this->adminModel->setRecoveryToken($values->username, $token);
+
+        $recoveryLink = BASE_URL . 'recovery/' . $token;
+
+        $mail = new Message;
+        $mail->setFrom(EMAIL)
+            ->addTo($values->username)
+            ->setSubject('Password Recovery')
+            ->setBody("Click the following link to recover your password: \n" . $recoveryLink);
+
+        try {
+            $this->mailer->send($mail);
+            $this->msg->info('A password recovery link has been sent to your email address.');
+        } catch (\Nette\Mail\SendException $e) {
+            $this->msg->error('There was an error sending the recovery email. Please contact support.');
+        }
+
+        header('Location: ' . BASE_URL . 'login');
+        exit;
     }
     
-    public function recoveryPassword($token)
+    public function recoveryPassword(string $token)
     {
-        $form = $this->recoveryPassword->create($token);
-        $this->view->show('login/partial/head.php', ['PageTitle' => T::trans('Recovery password')]);
-        $this->view->show('login/lost_password.php', ['form' => $form]);
-        $this->view->show('login/partial/footer.php');
+        $user = $this->adminModel->getUserByToken($token);
+
+        if (!$user || (time() - $user['recovery_time']) > 3600) { // 1 hour expiration
+            $this->msg->error('This recovery link is invalid or has expired.');
+            header('Location: ' . BASE_URL . 'login');
+            exit;
+        }
+
+        $recoveryPasswordForm = new RecoveryPasswordForm();
+        $form = $recoveryPasswordForm->create();
+        $form->onSuccess[] = function (Form $form, \stdClass $values) use ($token) {
+            $this->recoveryPasswordFormSucceeded($values, $token);
+        };
+        
+        $this->view->load('Recovery Password', 'login/lost_password.php', ['form' => $form]);
+    }
+
+    public function recoveryPasswordFormSucceeded(\stdClass $values, string $token): void
+    {
+        $hashedPassword = password_hash($values->password, PASSWORD_DEFAULT);
+        $success = $this->adminModel->updatePasswordByToken($token, $hashedPassword);
+
+        if ($success) {
+            $this->msg->success('Your password has been updated successfully. Please log in.');
+        } else {
+            $this->msg->error('Failed to update password. Please try again.');
+        }
+        header('Location: ' . BASE_URL . 'login');
+        exit;
     }
 }

@@ -1,86 +1,44 @@
 <?php
 
-/**
- * This file is part of the Instant MVC micro-framework project.
- * 
- * @package     Instant MVC micro-framework
- * @author      Valentino Pesce 
- * @link        https://github.com/kenlog
- * @copyright   2019 (c) Valentino Pesce <valentino@iltuobrand.it>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+declare(strict_types=1);
 
-namespace Instant\Core\Views;
+namespace DocPHT\Core\Views;
 
-use DocPHT\Model\PageModel;
-use DocPHT\Model\AdminModel;
-use DocPHT\Core\Translator\T;
-use DocPHT\Model\BackupsModel;
-use DocPHT\Model\HomePageModel;
-use DocPHT\Form\VersionSelectForm;
-use Plasticbrain\FlashMessages\FlashMessages;
-use Symfony\Component\Translation\Translator;
-use Symfony\Component\Translation\Loader\ArrayLoader;
-
-class View 
+class View
 {
-	protected $pageModel;
-	protected $backupsModel;
-	protected $homePageModel;
-	protected $version;
-	protected $msg;
+    private array $defaultVars = [];
 
-	public function __construct()
-	{
-		$this->pageModel = new PageModel();
-		$this->adminModel = new AdminModel();
-		$this->backupsModel = new BackupsModel();
-		$this->homePageModel = new HomePageModel();
-		$this->version = new VersionSelectForm();
-		$this->msg = new FlashMessages();
-	}
+    /**
+     * Add a default variable to be passed to every view.
+     */
+    public function addDefault(string $key, $value)
+    {
+        $this->defaultVars[$key] = $value;
+    }
 
-	public function show($file, $data = null)
-	{
-		if (isset($_SESSION['Active'])) {
-			$adminModel = $this->adminModel;
-            $userLanguage = $adminModel->getUserTrans($_SESSION['Username']);
+    /**
+     * Render a view file.
+     */
+    public function show(string $path, array $vars = [])
+    {
+        // Merge default variables with specific view variables
+        $finalVars = array_merge($this->defaultVars, $vars);
 
-			if (isset($userLanguage)) {
-				$t = new Translator($userLanguage);
-				$t->addLoader('array', new ArrayLoader());
-				if (file_exists('src/translations/'.$userLanguage.'.php')) {
-					include 'src/translations/'.$userLanguage.'.php';
-				} else {
-					include 'src/translations/'.LANGUAGE.'.php';
-				} 
-			} 
-		} elseif (file_exists('src/translations/'.LANGUAGE.'.php')) {
-			$t = new Translator(LANGUAGE);
-			$t->addLoader('array', new ArrayLoader());
-			include 'src/translations/'.LANGUAGE.'.php';
-		} else {
-			echo "Make sure that the config.php file is present in the config folder and that the language code is entered.";
-			exit;
-		}
-		
-		if (is_array($data))
-		{
-			extract($data);
-		}
-		$this->pageModel;
-		$this->msg;
-		$this->adminModel;
-		include 'src/views/'.$file;
-	}
+        // This makes the array keys available as variables (e.g., $t, $PageTitle)
+        extract($finalVars, EXTR_SKIP);
 
-	public function load(string $title, string $path, array $viewdata = null)
-	{
-		$data = ['PageTitle' => T::trans($title)];
-		$this->show('partial/head.php',$data);
-		$this->show($path, $viewdata);
-		$this->show('partial/footer.php');
-	}
+        // Include the view file
+        include 'src/views/' . $path;
+    }
+
+    /**
+     * Load a full page with head and footer.
+     */
+    public function load(string $pageTitle, string $path, array $vars = [])
+    {
+        $vars['PageTitle'] = $pageTitle;
+        $this->show('partial/head.php', $vars);
+        $this->show($path, $vars);
+        $this->show('partial/footer.php');
+    }
 }
