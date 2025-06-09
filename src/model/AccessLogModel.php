@@ -15,7 +15,8 @@ namespace DocPHT\Model;
 
 use Browser;
 use DocPHT\Core\Translator\T;
-use geertw\IpAnonymizer\IpAnonymizer;
+use BocharskyBw\IpAnonymizer\IpAnonymizer;
+
 
 class AccessLogModel
 {

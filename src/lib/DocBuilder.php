@@ -14,21 +14,18 @@
 namespace DocPHT\Lib;
 
 use DocPHT\Model\PageModel;
-use DocPHT\Core\Translator\T;
-use Instant\Core\Helper\TextHelper;
-use Plasticbrain\FlashMessages\FlashMessages;
+use Flasher\Prime\Flasher;
+use Flasher\Prime\Storage\StorageManager;
 
 class DocBuilder 
 {
     
-    protected $pageModel;
-    protected $msg;
-
-	public function __construct()
-	{
+    public function __construct()
+    {
         $this->pageModel = new PageModel();
-        $this->msg = new FlashMessages();
-	}
+        $storageManager = new StorageManager();
+        $this->msg = new Flasher($storageManager);
+    }
     /**
      * jsonSwitch
      *

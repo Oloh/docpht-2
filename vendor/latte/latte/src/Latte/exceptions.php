@@ -11,67 +11,53 @@ namespace Latte;
 
 
 /**
- * The exception occured during Latte compilation.
+ * Common interface for all Latte exceptions.
  */
-class CompileException extends \Exception
+interface Exception
 {
-	/** @var string */
-	public $sourceCode;
-
-	/** @var string */
-	public $sourceName;
-
-	/** @var ?int */
-	public $sourceLine;
+}
 
 
-	public function setSource(string $code, ?int $line, ?string $name = null): self
+/**
+ * Template compilation failed.
+ */
+class CompileException extends \Exception implements Exception
+{
+	use PositionAwareException;
+
+	/** @deprecated */
+	public ?int $sourceLine;
+
+
+	public function __construct(string $message, ?Compiler\Position $position = null, ?\Throwable $previous = null)
 	{
-		$this->sourceCode = $code;
-		$this->sourceLine = $line;
-		$this->sourceName = $name;
-		if (@is_file($name)) { // @ - may trigger error
-			$this->message = rtrim($this->message, '.')
-				. ' in ' . str_replace(dirname($name, 2), '...', $name) . ($line ? ":$line" : '');
-		} elseif ($line > 1) {
-			$this->message = rtrim($this->message, '.') . ' (on line ' . $line . ')';
-		}
-
-		return $this;
+		parent::__construct($message, 0, $previous);
+		$this->position = $position;
+		$this->sourceLine = $position?->line;
+		$this->generateMessage();
 	}
 }
 
 
 /**
- * The exception that indicates error of the last Regexp execution.
+ * Template rendering failed.
  */
-class RegexpException extends \Exception
+class RuntimeException extends \RuntimeException implements Exception
 {
-	public const MESSAGES = [
-		PREG_INTERNAL_ERROR => 'Internal error',
-		PREG_BACKTRACK_LIMIT_ERROR => 'Backtrack limit was exhausted',
-		PREG_RECURSION_LIMIT_ERROR => 'Recursion limit was exhausted',
-		PREG_BAD_UTF8_ERROR => 'Malformed UTF-8 data',
-		PREG_BAD_UTF8_OFFSET_ERROR => 'Offset didn\'t correspond to the begin of a valid UTF-8 code point',
-		6 => 'Failed due to limited JIT stack space', // PREG_JIT_STACKLIMIT_ERROR
-	];
-
-
-	public function __construct(?string $message, ?int $code = null)
-	{
-		parent::__construct($message ?: (self::MESSAGES[$code] ?? 'Unknown error'), $code);
-	}
 }
 
 
 /**
- * Exception thrown when a not allowed construction is used in a template.
+ * Template uses forbidden function, filter or variable in sandbox mode.
  */
-class SecurityViolationException extends \Exception
+class SecurityViolationException extends \Exception implements Exception
 {
-}
+	use PositionAwareException;
 
-
-class RuntimeException extends \RuntimeException
-{
+	public function __construct(string $message, ?Compiler\Position $position = null)
+	{
+		parent::__construct($message);
+		$this->position = $position;
+		$this->generateMessage();
+	}
 }

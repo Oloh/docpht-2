@@ -13,7 +13,7 @@ use Nette;
 
 
 /**
- * Containers are objects that logically contain zero or more IComponent components.
+ * Defines functionality for objects that can contain other components.
  */
 interface IContainer extends IComponent
 {
@@ -35,8 +35,8 @@ interface IContainer extends IComponent
 	function getComponent(string $name): ?IComponent;
 
 	/**
-	 * Iterates over descendants components.
-	 * @return \Iterator<int|string,IComponent>
+	 * Returns immediate child components.
+	 * @return array<int|string,IComponent>
 	 */
-	function getComponents(): \Iterator;
+	function getComponents(): iterable;
 }

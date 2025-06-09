@@ -9,8 +9,8 @@
  */
 namespace PHPUnit\Framework\MockObject\Stub;
 
+use function sprintf;
 use PHPUnit\Framework\MockObject\Invocation;
-use PHPUnit\Framework\MockObject\Stub;
 
 /**
  * @internal This class is not covered by the backward compatibility promise for PHPUnit
@@ -36,6 +36,6 @@ final class ReturnArgument implements Stub
 
     public function toString(): string
     {
-        return \sprintf('return argument #%d', $this->argumentIndex);
+        return sprintf('return argument #%d', $this->argumentIndex);
     }
 }

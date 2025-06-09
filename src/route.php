@@ -1,184 +1,97 @@
 <?php
 
-use DocPHT\Controller\FormPageController;
+declare(strict_types=1);
+
+use DocPHT\Controller\AdminController;
 use DocPHT\Controller\ErrorPageController;
+use DocPHT\Controller\FormPageController;
+use DocPHT\Controller\HomeController;
 use DocPHT\Controller\LoginController;
-use DocPHT\Model\AdminModel;
+use Instant\Core\Controller\BaseController;
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+$dispatcher = FastRoute\simpleDispatcher(function(FastRoute\RouteCollector $r) {
 
-$route->get('/', 'DocPHT\Controller\HomeController@index');
+    // General Routes
+    $r->addRoute('GET', '/', [HomeController::class, 'index']);
+    $r->addRoute('GET', '/switch-theme', [BaseController::class, 'switchTheme']);
+    $r->addRoute(['GET', 'POST'], '/lost-password', [LoginController::class, 'lostPassword']);
+    $r->addRoute(['GET', 'POST'], '/recovery/{token:.+}', [LoginController::class, 'recoveryPassword']);
+    $r->addRoute(['GET', 'POST'], '/login', [LoginController::class, 'login']);
+    $r->addRoute('GET', '/logout', [LoginController::class, 'logout']);
 
-$route->get('/switch-theme', 'Instant\Core\Controller\BaseController@switchTheme');
+    // Admin Routes
+    $r->addGroup('/admin', function (FastRoute\RouteCollector $r) {
+        $r->addRoute('GET', '', [AdminController::class, 'settings']);
+        $r->addRoute(['GET', 'POST'], '/update-password', [AdminController::class, 'updatePassword']);
+        $r->addRoute(['GET', 'POST'], '/remove-user', [AdminController::class, 'removeUser']);
+        $r->addRoute(['GET', 'POST'], '/add-user', [AdminController::class, 'addUser']);
+        $r->addRoute(['GET', 'POST'], '/create-home', [AdminController::class, 'createHome']);
+        $r->addRoute(['GET', 'POST'], '/backup', [AdminController::class, 'backup']);
+        $r->addRoute(['GET', 'POST'], '/backup/save', [AdminController::class, 'saveBackup']);
+        $r->addRoute(['GET', 'POST'], '/backup/export', [AdminController::class, 'exportBackup']);
+        $r->addRoute(['GET', 'POST'], '/backup/delete', [AdminController::class, 'deleteBackup']);
+        $r->addRoute(['GET', 'POST'], '/backup/import', [AdminController::class, 'importBackup']);
+        $r->addRoute(['GET', 'POST'], '/backup/restore', [AdminController::class, 'restoreOptions']);
+        $r->addRoute(['GET', 'POST'], '/upload-logo', [AdminController::class, 'uploadLogo']);
+        $r->addRoute(['GET', 'POST'], '/remove-logo', [AdminController::class, 'removeLogo']);
+        $r->addRoute(['GET', 'POST'], '/remove-fav', [AdminController::class, 'removeFav']);
+        $r->addRoute(['GET', 'POST'], '/lastlogins', [AdminController::class, 'lastLogin']);
+        $r->addRoute(['GET', 'POST'], '/update-email', [AdminController::class, 'updateEmail']);
+        $r->addRoute(['GET', 'POST'], '/translations', [AdminController::class, 'translations']);
+    });
 
-if (!isset($_SESSION['Active'])) {
-    $route->get_post('/lost-password', 'DocPHT\Controller\LoginController@lostPassword');
+    // Page Routes
+    $r->addGroup('/page', function (FastRoute\RouteCollector $r) {
+        $r->addRoute(['GET', 'POST'], '/search', [BaseController::class, 'search']);
+        $r->addRoute(['GET', 'POST'], '/create', [FormPageController::class, 'getCreatePageForm']);
+        $r->addRoute(['GET', 'POST'], '/add-section', [FormPageController::class, 'getAddSectionForm']);
+        $r->addRoute(['GET', 'POST'], '/update', [FormPageController::class, 'getUpdatePageForm']);
+        $r->addRoute(['GET', 'POST'], '/insert', [FormPageController::class, 'getInsertSectionForm']);
+        $r->addRoute(['GET', 'POST'], '/modify', [FormPageController::class, 'getModifySectionForm']);
+        $r->addRoute(['GET', 'POST'], '/remove', [FormPageController::class, 'getRemoveSectionForm']);
+        $r->addRoute(['GET', 'POST'], '/sort', [FormPageController::class, 'getSortSectionForm']);
+        $r->addRoute(['GET', 'POST'], '/delete', [FormPageController::class, 'getDeletePageForm']);
+        $r->addRoute(['GET', 'POST'], '/import-version', [FormPageController::class, 'getImportVersionForm']);
+        $r->addRoute(['GET', 'POST'], '/export-version', [FormPageController::class, 'getExportVersionForm']);
+        $r->addRoute(['GET', 'POST'], '/restore-version', [FormPageController::class, 'getRestoreVersionForm']);
+        $r->addRoute(['GET', 'POST'], '/delete-version', [FormPageController::class, 'getDeleteVersionForm']);
+        $r->addRoute(['GET', 'POST'], '/save-version', [FormPageController::class, 'getSaveVersionForm']);
+        $r->addRoute(['GET', 'POST'], '/publish', [FormPageController::class, 'getPublish']);
+        $r->addRoute(['GET', 'POST'], '/home-set', [FormPageController::class, 'setHome']);
+        $r->addRoute(['GET', 'POST'], '/{topic}/{filename}', [FormPageController::class, 'getPage']);
+    });
+    
+    // Error Route
+    $r->addRoute('GET', '/error', [ErrorPageController::class, 'getPage']);
+});
+
+// Fetch method and URI from somewhere
+$httpMethod = $_SERVER['REQUEST_METHOD'];
+$uri = $_SERVER['REQUEST_URI'];
+
+// Strip query string (?foo=bar) and decode URI
+if (false !== $pos = strpos($uri, '?')) {
+    $uri = substr($uri, 0, $pos);
 }
+$uri = rawurldecode($uri);
 
-$route->get_post('/recovery/?', function($token){
-    if (isset($token)) {
-        $page = new LoginController();
-        $page->recoveryPassword($token);
-    } else {
-        $error = new ErrorPageController();
-        $error->getPage();
-    }
-});
-
-$route->get_post('/login', 'DocPHT\Controller\LoginController@login');
-
-if (isset($_SESSION['Active'])) {
-
-    $route->get('/logout', 'DocPHT\Controller\LoginController@logout');
-    
-    $route->group('/admin', function()
-    {
-        // /admin/
-        $this->get('/', 'DocPHT\Controller\AdminController@settings');
-
-        // /admin/update-password
-        $this->get_post('/update-password', 'DocPHT\Controller\AdminController@updatePassword');
-        
-        $adminModel = new AdminModel(); 
-        if (isset($_SESSION['Active']) && $adminModel->checkUserIsAdmin($_SESSION['Username']) == true ) {
-             // /admin/remove-user
-            $this->get_post('/remove-user', 'DocPHT\Controller\AdminController@removeUser');
-
-            // /admin/add-user
-            $this->get_post('/add-user', 'DocPHT\Controller\AdminController@addUser');
-
-            // /admin/create-home
-            $this->get_post('/create-home', 'DocPHT\Controller\AdminController@createHome');
-            
-            // /admin/backup
-            $this->get_post('/backup', 'DocPHT\Controller\AdminController@backup');
-            
-            // /admin/backup/save
-            $this->get_post('/backup/save', 'DocPHT\Controller\AdminController@saveBackup');
-            
-            // /admin/backup/export
-            $this->get_post('/backup/export', 'DocPHT\Controller\AdminController@exportBackup');
-            
-            // /admin/backup/delete
-            $this->get_post('/backup/delete', 'DocPHT\Controller\AdminController@deleteBackup');
-            
-            // /admin/backup/import
-            $this->get_post('/backup/import', 'DocPHT\Controller\AdminController@importBackup');
-            
-            // /admin/backup/restore
-            $this->get_post('/backup/restore', 'DocPHT\Controller\AdminController@restoreOptions');
-
-            // /admin/upload-logo
-            $this->get_post('/upload-logo', 'DocPHT\Controller\AdminController@uploadLogo');
-
-            // /admin/remove-logo
-            $this->get_post('/remove-logo', 'DocPHT\Controller\AdminController@removeLogo');
-
-            // /admin/remove-fav
-            $this->get_post('/remove-fav', 'DocPHT\Controller\AdminController@removeFav');
-
-            // /admin/lastlogins
-            $this->get_post('/lastlogins', 'DocPHT\Controller\AdminController@lastLogin');
-
-        }
-        
-        $this->get_post('/update-email','DocPHT\Controller\AdminController@updateEmail');
-
-        // /admin/translations
-        $this->get_post('/translations', 'DocPHT\Controller\AdminController@translations');
-
-        // Anything else
-        $this->any('/*', function(){
-            $error = new ErrorPageController();
-            $error->getPage();
-        });
-    });
-} else {
-    $route->any('/admin', function(){
-        $login = new LoginController();
-        $login->login();
-    });
-    
-    $route->any('/admin/*', function(){
-        $login = new LoginController();
-        $login->login();
-    });
+$routeInfo = $dispatcher->dispatch($httpMethod, $uri);
+switch ($routeInfo[0]) {
+    case FastRoute\Dispatcher::NOT_FOUND:
+        $controller = new ErrorPageController();
+        $controller->getPage(); // This is the fix
+        break;
+    case FastRoute\Dispatcher::METHOD_NOT_ALLOWED:
+        $allowedMethods = $routeInfo[1];
+        $controller = new ErrorPageController();
+        $controller->getPage(); // This is the fix
+        break;
+    case FastRoute\Dispatcher::FOUND:
+        $handler = $routeInfo[1];
+        $vars = $routeInfo[2];
+        $class = $handler[0];
+        $method = $handler[1];
+        $controller = new $class;
+        $controller->$method($vars);
+        break;
 }
-
-// /page
-$route->group('/page', function()
-{
-    // /page/topic/filename
-    $this->get_post('/{topic}/{filename}', function($topic, $filename){
-        $page = 'pages/'.$topic.'/'.$filename.'.php';
-        if (file_exists($page)) {
-            $page = new FormPageController();
-            $page->getPage($topic, $filename);
-        } else {
-            $error = new ErrorPageController();
-            $error->getPage();
-        }
-    });
-
-    // /page/search
-    $this->get_post('/search', 'Instant\Core\Controller\BaseController@search');
-
-    if (isset($_SESSION['Active'])) {
-        // /page/create
-        $this->get_post('/create', 'DocPHT\Controller\FormPageController@getCreatePageForm');
-        // /page/add-section
-        $this->get_post('/add-section', 'DocPHT\Controller\FormPageController@getAddSectionForm');
-        // /page/update
-        $this->get_post('/update', 'DocPHT\Controller\FormPageController@getUpdatePageForm');
-        // /page/insert
-        $this->get_post('/insert', 'DocPHT\Controller\FormPageController@getInsertSectionForm');
-        // /page/modify
-        $this->get_post('/modify', 'DocPHT\Controller\FormPageController@getModifySectionForm');
-        // /page/remove
-        $this->get_post('/remove', 'DocPHT\Controller\FormPageController@getRemoveSectionForm');
-        // /page/sort
-        $this->get_post('/sort', 'DocPHT\Controller\FormPageController@getSortSectionForm');
-        // /page/delete
-        $this->get_post('/delete', 'DocPHT\Controller\FormPageController@getDeletePageForm');
-        // /page/import-version
-        $this->get_post('/import-version', 'DocPHT\Controller\FormPageController@getImportVersionForm');
-        // /page/export-version
-        $this->get_post('/export-version', 'DocPHT\Controller\FormPageController@getExportVersionForm');
-        // /page/restore-version
-        $this->get_post('/restore-version', 'DocPHT\Controller\FormPageController@getRestoreVersionForm');
-        // /page/delete-version
-        $this->get_post('/delete-version', 'DocPHT\Controller\FormPageController@getDeleteVersionForm');
-        // /page/save-version
-        $this->get_post('/save-version', 'DocPHT\Controller\FormPageController@getSaveVersionForm');
-        // /page/publish
-        $this->get_post('/publish', 'DocPHT\Controller\FormPageController@getPublish');
-        // /page/home-set
-        $this->get_post('/home-set', 'DocPHT\Controller\FormPageController@setHome');
-    } else {
-        $this->any('/*', function(){
-            $login = new LoginController();
-            $login->login();
-        });
-    }
-    
-    // Anything else
-    $this->any('/*', function(){
-        $error = new ErrorPageController();
-        $error->getPage();
-    });
-});
-
-// Anything else
-$route->any('/*', function(){
-    $error = new ErrorPageController();
-    $error->getPage();
-});

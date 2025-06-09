@@ -9,11 +9,20 @@
  */
 namespace PHPUnit\Runner\Filter;
 
+use function end;
+use function implode;
+use function preg_match;
+use function sprintf;
+use function str_replace;
+use Exception;
+use PHPUnit\Framework\ErrorTestCase;
 use PHPUnit\Framework\TestSuite;
 use PHPUnit\Framework\WarningTestCase;
 use PHPUnit\Util\RegularExpression;
+use PHPUnit\Util\Test;
 use RecursiveFilterIterator;
 use RecursiveIterator;
+use SebastianBergmann\RecursionContext\InvalidArgumentException;
 
 /**
  * @internal This class is not covered by the backward compatibility promise for PHPUnit
@@ -36,7 +45,7 @@ final class NameFilterIterator extends RecursiveFilterIterator
     private $filterMax;
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function __construct(RecursiveIterator $iterator, string $filter)
     {
@@ -46,7 +55,7 @@ final class NameFilterIterator extends RecursiveFilterIterator
     }
 
     /**
-     * @throws \SebastianBergmann\RecursionContext\InvalidArgumentException
+     * @throws InvalidArgumentException
      */
     public function accept(): bool
     {
@@ -56,20 +65,20 @@ final class NameFilterIterator extends RecursiveFilterIterator
             return true;
         }
 
-        $tmp = \PHPUnit\Util\Test::describe($test);
+        $tmp = Test::describe($test);
 
-        if ($test instanceof WarningTestCase) {
+        if ($test instanceof ErrorTestCase || $test instanceof WarningTestCase) {
             $name = $test->getMessage();
         } elseif ($tmp[0] !== '') {
-            $name = \implode('::', $tmp);
+            $name = implode('::', $tmp);
         } else {
             $name = $tmp[1];
         }
 
-        $accepted = @\preg_match($this->filter, $name, $matches);
+        $accepted = @preg_match($this->filter, $name, $matches);
 
         if ($accepted && isset($this->filterMax)) {
-            $set      = \end($matches);
+            $set      = end($matches);
             $accepted = $set >= $this->filterMin && $set <= $this->filterMax;
         }
 
@@ -77,7 +86,7 @@ final class NameFilterIterator extends RecursiveFilterIterator
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     private function setFilter(string $filter): void
     {
@@ -85,40 +94,43 @@ final class NameFilterIterator extends RecursiveFilterIterator
             // Handles:
             //  * testAssertEqualsSucceeds#4
             //  * testAssertEqualsSucceeds#4-8
-            if (\preg_match('/^(.*?)#(\d+)(?:-(\d+))?$/', $filter, $matches)) {
+            if (preg_match('/^(.*?)#(\d+)(?:-(\d+))?$/', $filter, $matches)) {
                 if (isset($matches[3]) && $matches[2] < $matches[3]) {
-                    $filter = \sprintf(
+                    $filter = sprintf(
                         '%s.*with data set #(\d+)$',
-                        $matches[1]
+                        $matches[1],
                     );
 
-                    $this->filterMin = $matches[2];
-                    $this->filterMax = $matches[3];
+                    $this->filterMin = (int) $matches[2];
+                    $this->filterMax = (int) $matches[3];
                 } else {
-                    $filter = \sprintf(
+                    $filter = sprintf(
                         '%s.*with data set #%s$',
                         $matches[1],
-                        $matches[2]
+                        $matches[2],
                     );
                 }
             } // Handles:
             //  * testDetermineJsonError@JSON_ERROR_NONE
             //  * testDetermineJsonError@JSON.*
-            elseif (\preg_match('/^(.*?)@(.+)$/', $filter, $matches)) {
-                $filter = \sprintf(
+            elseif (preg_match('/^(.*?)@(.+)$/', $filter, $matches)) {
+                $filter = sprintf(
                     '%s.*with data set "%s"$',
                     $matches[1],
-                    $matches[2]
+                    $matches[2],
                 );
             }
 
             // Escape delimiters in regular expression. Do NOT use preg_quote,
             // to keep magic characters.
-            $filter = \sprintf('/%s/i', \str_replace(
-                '/',
-                '\\/',
-                $filter
-            ));
+            $filter = sprintf(
+                '/%s/i',
+                str_replace(
+                    '/',
+                    '\\/',
+                    $filter,
+                ),
+            );
         }
 
         $this->filter = $filter;

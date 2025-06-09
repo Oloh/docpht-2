@@ -26,13 +26,12 @@ class ColorPicker extends BaseControl
 
 	/**
 	 * @param  ?string $value
-	 * @return static
 	 */
-	public function setValue($value)
+	public function setValue($value): static
 	{
 		if ($value === null) {
 			$this->value = '#000000';
-		} elseif (is_string($value) && preg_match('~#?[0-9a-f]{6}~DAi', $value)) {
+		} elseif (is_string($value) && preg_match('~#?[0-9a-f]{6}~Ai', $value)) {
 			$this->value = '#' . strtolower(ltrim($value, '#'));
 		} else {
 			throw new Nette\InvalidArgumentException('Color must have #rrggbb format.');
@@ -45,7 +44,7 @@ class ColorPicker extends BaseControl
 	{
 		try {
 			parent::loadHttpData();
-		} catch (Nette\InvalidArgumentException $e) {
+		} catch (Nette\InvalidArgumentException) {
 			$this->setValue(null);
 		}
 	}

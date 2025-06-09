@@ -1,61 +1,58 @@
 <?php
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+declare(strict_types=1);
 
-namespace DocPHT\Core\Session;
+namespace DocPHT\Core\Http;
+
+use Laminas\Session\Container;
+use Laminas\Session\SessionManager;
+use Laminas\Session\Config\SessionConfig;
+use Laminas\Session\Validator\HttpUserAgent;
+use Laminas\Session\Validator\RemoteAddr;
 
 class Session
 {
+    protected $container;
+    protected $manager;
+
     public function __construct()
     {
-        if(session_status() === PHP_SESSION_NONE) {
-            ini_set('session.cookie_httponly', 1); // XSS attack protection
-            ini_set('session.use_strict_mode', 1); // Prevents an attack that forces users to use a known session ID
-            // Set an additional entropy
-            ini_set('session.entropy_file', '/dev/urandom');
-            ini_set('session.entropy_length', '256');
-            session_name('ID'); 
-            session_start();
-        }
+        $config = new SessionConfig();
+        $config->setCookieLifetime(1800); // 30 minutes in seconds
+
+        $this->manager = new SessionManager($config);
+
+        // Add validators for session security
+        $chain = $this->manager->getValidatorChain();
+        $chain->attach('session.validator.http_user_agent', [new HttpUserAgent(), 'isValid']);
+        $chain->attach('session.validator.remote_addr', [new RemoteAddr(), 'isValid']);
+
+        $this->manager->start();
+        $this->container = new Container('default', $this->manager);
     }
 
-    public function sessionExpiration()
+    public function set(string $name, $value)
     {
-        $expireAfter = 30; // session life time expressed in minutes
-
-        if(isset($_SESSION['last_action'])){
-
-            $secondsInactive = time() - $_SESSION['last_action'];
-            
-            $expireAfterSeconds = $expireAfter * 60;
-            
-            if($secondsInactive >= $expireAfterSeconds){
-                session_unset();
-                session_destroy();
-            }
-        }
-
-        $_SESSION['last_action'] = time();
+        $this->container->offsetSet($name, $value);
     }
 
-    public function preventStealingSession()
+    public function get(string $name)
     {
-        // Interesting stuff 
-        // Prevent malicious users from stealing sessions
-        if (isset($_SESSION['PREV_USERAGENT'])) {
-            if ($_SERVER['HTTP_USER_AGENT'] != $_SESSION['PREV_USERAGENT']) {
-                session_unset();
-                session_destroy();
-            }
-        }
+        return $this->container->offsetGet($name);
+    }
+
+    public function exists(string $name): bool
+    {
+        return $this->container->offsetExists($name);
+    }
+
+    public function delete(string $name)
+    {
+        $this->container->offsetUnset($name);
+    }
+
+    public function destroy()
+    {
+        $this->manager->destroy();
     }
 }

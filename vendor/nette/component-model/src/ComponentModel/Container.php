@@ -13,26 +13,24 @@ use Nette;
 
 
 /**
- * ComponentContainer is default implementation of IContainer.
+ * Manages a collection of child components.
  *
- * @property-read \Iterator $components
+ * @property-read IComponent[] $components
  */
 class Container extends Component implements IContainer
 {
 	private const NameRegexp = '#^[a-zA-Z0-9_]+$#D';
 
 	/** @var IComponent[] */
-	private $components = [];
-
-	/** @var Container|null */
-	private $cloning;
+	private array $components = [];
+	private ?Container $cloning = null;
 
 
 	/********************* interface IContainer ****************d*g**/
 
 
 	/**
-	 * Adds the component to the container.
+	 * Adds a child component to the container.
 	 * @return static
 	 * @throws Nette\InvalidStateException
 	 */
@@ -93,7 +91,7 @@ class Container extends Component implements IContainer
 
 
 	/**
-	 * Removes the component from the container.
+	 * Removes a child component from the container.
 	 */
 	public function removeComponent(IComponent $component): void
 	{
@@ -108,8 +106,9 @@ class Container extends Component implements IContainer
 
 
 	/**
-	 * Returns component specified by name or path.
+	 * Retrieves a child component by name or creates it if it doesn't exist.
 	 * @param  bool  $throw  throw exception if component doesn't exist?
+	 * @return ($throw is true ? IComponent : ?IComponent)
 	 */
 	final public function getComponent(string $name, bool $throw = true): ?IComponent
 	{
@@ -144,7 +143,7 @@ class Container extends Component implements IContainer
 		} elseif ($throw) {
 			$hint = Nette\Utils\ObjectHelpers::getSuggestion(array_merge(
 				array_map('strval', array_keys($this->components)),
-				array_map('lcfirst', preg_filter('#^createComponent([A-Z0-9].*)#', '$1', get_class_methods($this)))
+				array_map('lcfirst', preg_filter('#^createComponent([A-Z0-9].*)#', '$1', get_class_methods($this))),
 			), $name);
 			throw new Nette\InvalidArgumentException("Component with name '$name' does not exist" . ($hint ? ", did you mean '$hint'?" : '.'));
 		}
@@ -154,7 +153,7 @@ class Container extends Component implements IContainer
 
 
 	/**
-	 * Component factory. Delegates the creation of components to a createComponent<Name> method.
+	 * Creates a new component. Delegates creation to createComponent<Name> method if it exists.
 	 */
 	protected function createComponent(string $name): ?IComponent
 	{
@@ -179,28 +178,47 @@ class Container extends Component implements IContainer
 
 
 	/**
-	 * Iterates over descendants components.
-	 * @return \Iterator<int|string,IComponent>
+	 * Returns all immediate child components.
+	 * @return array<int|string,IComponent>
 	 */
-	final public function getComponents(bool $deep = false, ?string $filterType = null): \Iterator
+	final public function getComponents(): iterable
 	{
-		$iterator = new RecursiveComponentIterator($this->components);
-		if ($deep) {
+		$filterType = func_get_args()[1] ?? null;
+		if (func_get_args()[0] ?? null) { // back compatibility
+			$iterator = new RecursiveComponentIterator($this->components);
 			$iterator = new \RecursiveIteratorIterator($iterator, \RecursiveIteratorIterator::SELF_FIRST);
+			if ($filterType) {
+				$iterator = new \CallbackFilterIterator($iterator, fn($item) => $item instanceof $filterType);
+			}
+			return $iterator;
 		}
 
-		if ($filterType) {
-			$iterator = new \CallbackFilterIterator($iterator, function ($item) use ($filterType) {
-				return $item instanceof $filterType;
-			});
-		}
-
-		return $iterator;
+		return $filterType
+			? array_filter($this->components, fn($item) => $item instanceof $filterType)
+			: $this->components;
 	}
 
 
 	/**
-	 * Descendant can override this method to disallow insert a child by throwing an Nette\InvalidStateException.
+	 * Retrieves the entire hierarchy of components, including all nested child components (depth-first).
+	 * @return list<IComponent>
+	 */
+	final public function getComponentTree(): array
+	{
+		$res = [];
+		foreach ($this->components as $component) {
+			$res[] = $component;
+			if ($component instanceof self) {
+				$res = array_merge($res, $component->getComponentTree());
+			}
+		}
+		return $res;
+	}
+
+
+	/**
+	 * Validates a child component before it's added to the container.
+	 * Descendant classes can override this to implement custom validation logic.
 	 * @throws Nette\InvalidStateException
 	 */
 	protected function validateChildComponent(IComponent $child): void
@@ -212,7 +230,7 @@ class Container extends Component implements IContainer
 
 
 	/**
-	 * Object cloning.
+	 * Handles object cloning. Clones all child components and re-sets their parents.
 	 */
 	public function __clone()
 	{

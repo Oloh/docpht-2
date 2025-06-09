@@ -1,16 +1,20 @@
 <?php // ini_set('display_errors', 1); // IMPORTANT not to use in production
 
 use Tracy\Debugger;
-use DocPHT\Core\Session\Session;
+use DocPHT\Core\Http\Session;
+use Flasher\Prime\Flasher;
+use Flasher\Prime\Config\Config;
+use Flasher\Prime\Storage\StorageManager;
+use Flasher\Prime\Renderer\Renderer;
+use Flasher\Prime\Stamps\StampManager;
+use Flasher\Prime\Container\FlasherContainer;
 
 /**
  * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
+ * * @author Valentino Pesce
  * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
  * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
+ * * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -29,7 +33,7 @@ if (file_exists($configurationFile) && file_exists($installFolder)) {
             unlink($file);
         }
         if (is_dir_empty($installFolder.'/partial')) 
-         rmdir($installFolder.'/partial');
+            rmdir($installFolder.'/partial');
     }
     $files = glob($installFolder.'/*');
     foreach($files as $file){
@@ -37,7 +41,7 @@ if (file_exists($configurationFile) && file_exists($installFolder)) {
             unlink($file);
         }
         if (is_dir_empty($installFolder)) 
-         rmdir($installFolder);
+            rmdir($installFolder);
     }
     if (file_exists($installFolder.'/partial') && file_exists($installFolder)) {
         include 'install/error.php';
@@ -60,36 +64,35 @@ if (file_exists($configurationFile) && file_exists($installFolder)) {
         if(is_file($file)) {
             copy($file, $installFolder . "/" . pathinfo($file,PATHINFO_BASENAME));
         }
-    }    
+    }       
     include 'install/config.php';
 } elseif (!file_exists($configurationFile)) {
     include 'install/config.php';
 } elseif (file_exists($autoload)) {
-require $autoload;
+    require $autoload;
 
-$session = new Session();
-$session->sessionExpiration();
-$session->preventStealingSession();
+    // Correctly initialize Flasher
+    $config = new Config();
+    $storageManager = new StorageManager();
+    $renderer = new Renderer($storageManager, $config);
+    $stampManager = new StampManager();
+    $flasher = new Flasher($config, $storageManager, $renderer, $stampManager);
+    FlasherContainer::setContainer($flasher);
 
-require $constants;
-require $configurationFile;
+    $sessions = new DocPHT\Core\Http\Session;
 
-// Debugger::enable(Debugger::DEVELOPMENT); // IMPORTANT not to use in production
+    require $constants;
+    require $configurationFile;
 
-$loader = new Nette\Loaders\RobotLoader;
-$loader->addDirectory(__DIR__ . '/src');
-$loader->setTempDirectory(__DIR__ . '/temp');
-$loader->register();
+    // Debugger::enable(Debugger::DEVELOPMENT); // IMPORTANT not to use in production
 
-$app            = System\App::instance();
-$app->request   = System\Request::instance();
-$app->route     = System\Route::instance($app->request);
+    $loader = new Nette\Loaders\RobotLoader;
+    $loader->addDirectory(__DIR__ . '/src');
+    $loader->setTempDirectory(__DIR__ . '/temp');
+    $loader->register();
 
-$route = $app->route;
+    require_once __DIR__ . '/src/route.php';
 
-include 'src/route.php';
-
-$route->end();
 }
 
 function is_dir_empty($dir) 

@@ -51,6 +51,4 @@
     <div id="content">
     <div class="container-fluid">
         
-    <?php if($this->msg->display()) : ?>
-        <?php echo $this->msg->display(); ?>
-    <?php endif; ?>
+  <?php flasher()->render(); ?>

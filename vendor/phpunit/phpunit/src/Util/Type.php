@@ -36,15 +36,4 @@ final class Type
                 return false;
         }
     }
-
-    public static function isCloneable(object $object): bool
-    {
-        try {
-            $clone = clone $object;
-        } catch (\Throwable $t) {
-            return false;
-        }
-
-        return $clone instanceof $object;
-    }
 }

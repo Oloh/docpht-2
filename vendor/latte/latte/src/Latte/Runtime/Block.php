@@ -13,18 +13,8 @@ namespace Latte\Runtime;
 /** @internal */
 final class Block
 {
-	/** @var ?string  content type */
-	public $contentType;
+	public ?string $contentType = null;
 
-	/** @var ?string  used by BlockMacros */
-	public $code;
-
-	/** @var callable[]  used by Template */
-	public $functions = [];
-
-	/** @var bool  used by BlockMacros */
-	public $hasParameters = false;
-
-	/** @var ?string  used by BlockMacros */
-	public $comment;
+	/** @var callable[] */
+	public array $functions = [];
 }

@@ -17,10 +17,7 @@ use Latte;
  */
 class FilterInfo
 {
-	use Latte\Strict;
-
-	/** @var string|null */
-	public $contentType;
+	public ?string $contentType = null;
 
 
 	public function __construct(?string $contentType = null)
