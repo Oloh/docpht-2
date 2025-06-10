@@ -4,20 +4,25 @@ declare(strict_types=1);
 
 use App\Core\Controller\ErrorPageController;
 use App\Core\NewAppVersion;
-use App\Core\translations\T;
-use App\lib\DocPHT;
+use App\Core\Translations\T;
+use App\Lib\DocPHT;
 use App\Model\AccessLogModel;
 use App\Model\AdminModel;
 use App\Model\PageModel;
-use App\lib\DocBuilder;
+use App\Lib\DocBuilder;
 use Flasher\Prime\Flasher;
 use Flasher\Prime\Storage\StorageManager;
 use Flasher\Prime\Config\Config;
 use Flasher\Prime\Response\Presenter\HtmlPresenter;
-use Nette\Application\Routers\Route;
+use Flasher\Prime\Response\ResponseManager;
+use Flasher\Prime\Response\Resource\ResourceManager;
+use Flasher\Prime\EventDispatcher\EventDispatcher;
+use Flasher\Prime\Factory\NotificationFactory;
 use Nette\Application\Routers\RouteList;
 use Nette\Bootstrap\Configurator;
 use Nette\Http\Session;
+use Nette\Http\IRequest;
+use Nette\Http\IResponse;
 
 if (file_exists(__DIR__ . '/vendor/autoload.php')) {
     require __DIR__ . '/vendor/autoload.php';
@@ -25,11 +30,6 @@ if (file_exists(__DIR__ . '/vendor/autoload.php')) {
     header('Content-Type: text/plain');
     echo 'Missing vendor/autoload.php. Did you run "composer install"?';
     exit(1);
-}
-
-if (version_compare(phpversion(), '7.4.0', '<=')) {
-    echo T::js('This app required PHP 7.4 or newer.');
-    exit;
 }
 
 if (file_exists(__DIR__ . '/src/config/config.php') && is_readable(__DIR__ . '/src/config/config.php')) {
@@ -44,49 +44,38 @@ if (file_exists(__DIR__ . '/src/config/config.php') && is_readable(__DIR__ . '/s
     exit;
 }
 
-// Check if maintenance mode is defined and enabled
-if (defined('MAINTENANCE_MODE') && MAINTENANCE_MODE === true) {
-    $errorController = new ErrorPageController();
-    $errorController->serviceUnavailable();
-    exit;
+$configurator = new Configurator;
+$configurator->setDebugMode(true); 
+$logDir = __DIR__ . '/log';
+if (!is_dir($logDir)) {
+    mkdir($logDir, 0777, true);
 }
-$configurator = new Configurator();
-
-// Check if debug mode is defined and enabled
-$configurator->setDebugMode(defined('DEBUG_MODE') && DEBUG_MODE === true);
-
-$configurator->enableTracy(__DIR__ . '/log');
+@chmod($logDir, 0777); 
+$configurator->enableTracy($logDir);
 $configurator->setTempDirectory(__DIR__ . '/temp');
-$configurator->addConfig(__DIR__ . '/src/config/nette.neon');
+$configurator->addConfig(__DIR__ . '/src/Config/nette.neon');
 
 $container = $configurator->createContainer();
 $application = $container->getByType('Nette\Application\Application');
 
-$router = new RouteList();
+$request = $container->getByType(IRequest::class);
+$response = $container->getByType(IResponse::class);
+$session = new Session($request, $response);
+$session->start();
 
-if (file_exists(__DIR__ . '/src/route.php') && is_readable(__DIR__ . '/src/route.php')) {
-    require_once __DIR__ . '/src/route.php';
-}
-$application->getRouter(new RouteList());
+// --- FINAL CORRECT FLASHER INITIALIZATION ---
+$flasherConfigData = require __DIR__ . '/src/config/flasher.php';
+$config = new Config($flasherConfigData);
+$storageManager = new StorageManager();
+$notificationFactory = new NotificationFactory();
+$eventDispatcher = new EventDispatcher();
+$resourceManager = new ResourceManager($config);
+$responseManager = new ResponseManager($resourceManager, $storageManager, $eventDispatcher);
 
-$session = new Session($application->getHttpRequest(), $application->getHttpResponse());
+$flasher = new Flasher('flasher', $responseManager, $storageManager);
 
-$storageManager = new StorageManager($session);
-$config = new Config(require __DIR__ . '/src/config/flasher.php');
-$renderer = new HtmlPresenter($storageManager, $config->all());
+$GLOBALS['flasher'] = $flasher;
+$GLOBALS['flasherResponseManager'] = $responseManager; // This is the correct object for views
+// --- End Flasher Init ---
 
-
-$docpht = new DocPHT(
-    VERSION,
-    new AccessLogModel(),
-    new DocBuilder($session),
-    new PageModel($session),
-    new AdminModel()
-);
-
-// Check if new version check is defined and enabled
-if (defined('CHECK_NEW_VERSION') && CHECK_NEW_VERSION === true) {
-    new NewAppVersion($docpht, $session);
-}
-
-$application->run();
+require_once __DIR__ . '/src/route.php';
