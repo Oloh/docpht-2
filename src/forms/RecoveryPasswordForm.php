@@ -1,80 +1,59 @@
 <?php
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+declare(strict_types=1);
 
 namespace App\Forms;
 
-use DocPHT\Core\Translator\T;
+use App\Core\Translations\T;
 use Nette\Forms\Form;
 use Nette\Utils\Html;
+use Nette\Security\Passwords;
 
 class RecoveryPasswordForm extends MakeupForm
 {
+    private Passwords $passwords;
+    private array $token;
 
-	public function create($token)
-	{
-		$form = new Form;
-		$form->onRender[] = [$this, 'bootstrap4'];
+    public function __construct(array $token)
+    {
+        parent::__construct();
+        $this->passwords = new Passwords();
+        $this->token = $token;
+    }
 
-		$form->addGroup(T::trans('Recovery Password: '))
-			->setOption('description', T::trans('Enter a new password for the account.'));
-			
-		$form->addPassword('newpassword', T::trans('Enter new password:'))
-			->setHtmlAttribute('placeholder', T::trans('Enter new password'))
-			->setHtmlAttribute('autocomplete','off')
-			->setAttribute('onmousedown',"this.type='text'")
-			->setAttribute('onmouseup',"this.type='password'")
-			->setAttribute('onmousemove',"this.type='password'")
-			->setOption('description', Html::el('small')->setAttribute('class','text-muted')->setText(T::trans('Click on the asterisks to show the password')))
-			->addRule(Form::MIN_LENGTH, T::trans('The password must be at least 6 characters long'), 6)
-			->setRequired(T::trans('Confirm password'));
-			
-		$form->addPassword('confirmpassword', T::trans('Confirm new password:'))
-			->setHtmlAttribute('placeholder', T::trans('Confirm password'))
-			->setHtmlAttribute('autocomplete','off')
-			->setAttribute('onmousedown',"this.type='text'")
-			->setAttribute('onmouseup',"this.type='password'")
-			->setAttribute('onmousemove',"this.type='password'")
-			->setOption('description', Html::el('small')->setAttribute('class','text-muted')->setText(T::trans('Click on the asterisks to show the password')))
-			->addRule($form::EQUAL, T::trans('Passwords do not match!'), $form['newpassword'])
-			->setRequired(T::trans('Confirm password'));
+    public function create(): Form
+    {
+        $form = new Form;
+        $form->onRender[] = [$this, 'bootstrap4'];
 
-		$form->addProtection(T::trans('Security token has expired, please submit the form again'));
-		
-		$form->addSubmit('submit',T::trans('Update user password'));
+        $form->addGroup(T::trans('Recovery password for: ') . ($this->token['username'] ?? ''))
+            ->setOption('description', T::trans('Enter a new password for the account.'));
 
-        $username = $this->adminModel->getUsernameFromToken($token);
-        $tokenFromUsername = $this->adminModel->getTokenFromUsername($username);
-        parse_str($token, $get);
-        $expiry = $get['expiry'];
+        $form->addPassword('password', T::trans('Enter new password:'))
+            ->setHtmlAttribute('placeholder', T::trans('Enter new password'))
+            ->addRule(Form::MIN_LENGTH, T::trans('The password must be at least 8 characters long.'), 8)
+            ->setRequired(T::trans('Enter a password.'));
+            
+        $form->addPassword('password_confirm', T::trans('Confirm new password:'))
+            ->setHtmlAttribute('placeholder', T::trans('Confirm new password'))
+            ->addRule(Form::EQUAL, T::trans('Passwords do not match!'), $form['password'])
+            ->setRequired(T::trans('Confirm new password.'));
 
-        if ($token != $tokenFromUsername) {
-            $this->msg->error(T::trans('Invalid link!'),BASE_URL);
-        } else {
-                $currentTime = time();
-                if ($expiry <= $currentTime) {
-                    $this->msg->error(T::trans('Link expired!'),BASE_URL);
-                } elseif ($form->isSuccess()) {
-                    $values = $form->getValues();
-                    
-                if (isset($values['newpassword']) && $values['newpassword'] == $values['confirmpassword']) {
-                        $this->adminModel->updatePassword($username, $values['newpassword']);
-                        $this->msg->success(T::trans('User password updated successfully.'),BASE_URL);
-                } else {
-                        $this->msg->error(T::trans('Sorry something didn\'t work!'),BASE_URL);
-                    }
-                } 
-            } 
+        $form->addHidden('id', $this->token['id'] ?? '');
 
-		return $form;
-	}
+        $form->addProtection(T::trans('Security token has expired, please submit the form again'));
+
+        $form->addSubmit('submit', T::trans('Update'));
+
+        if ($form->isSuccess()) {
+            $values = $form->getValues();
+            $this->adminModel->updatePassword($this->token['username'], $this->passwords->hash($values->password));
+            $this->adminModel->deletePasswordRecovery($this->token['token']);
+            $this->flasher?->addSuccess(T::trans('Password changed successfully.'));
+            header('Location: ' . BASE_URL . 'login');
+            exit;
+        }
+        
+        return $form;
+    }
 }

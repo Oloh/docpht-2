@@ -1,31 +1,40 @@
-<?php declare(strict_types=1);
+<?php
 
 /**
  * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
+ * * @author Valentino Pesce
  * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
  * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
+ * * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
+declare(strict_types=1);
+
 namespace App\Lib;
 
-use DocPHT\Model\PageModel;
-use Flasher\Prime\Flasher;
-use Flasher\Prime\Storage\StorageManager;
+use App\Model\PageModel;
+use App\Core\Helper\TextHelper;
+use App\Core\Translations\T;
+use Flasher\Prime\FlasherInterface;
 
 class DocBuilder 
 {
+    protected PageModel $pageModel;
+    public ?FlasherInterface $flasher;
     
     public function __construct()
     {
         $this->pageModel = new PageModel();
-        $storageManager = new StorageManager();
-        $this->msg = new Flasher($storageManager);
+        
+        // This is the fix: Use the central Flasher service created in index.php
+        if (isset($GLOBALS['flasher'])) {
+            $this->flasher = $GLOBALS['flasher'];
+        } else {
+            $this->flasher = null;
+        }
     }
+
     /**
      * jsonSwitch
      *
@@ -33,56 +42,50 @@ class DocBuilder
      *
      * @return string
      */
-    public function jsonSwitch($jsonVals)
+    public function jsonSwitch(array $jsonVals): string
     {
+        $option = '';
         if (isset($jsonVals['key'])) {
             switch ($jsonVals['key']) {
                 case 'title':
-                    $option = $this->title($jsonVals['v1'],$jsonVals['v1']);
+                    $option = $this->title($jsonVals['v1'], $jsonVals['v1']);
                     break;
                 case 'description':
                     $option = $this->description($jsonVals['v1']);
                     break;
                 case 'pathAdd':
-                    $option = $this->pathAdd($jsonVals['v1']);
-                    break;
                 case 'path':
                     $option = $this->pathAdd($jsonVals['v1']);
                     break;
                 case 'codeInline':
-                    $option = $this->codeInline($jsonVals['v1'],$jsonVals['v2']);
+                    $option = $this->codeInline($jsonVals['v1'], $jsonVals['v2']);
                     break;
                 case 'codeFile':
-					$option = $this->codeFile($jsonVals['v1'], $jsonVals['v2']);
+                    $option = $this->codeFile($jsonVals['v1'], $jsonVals['v2']);
                     break;
                 case 'blockquote':
                     $option = $this->blockquote($jsonVals['v1']);
                     break;
                 case 'image':
-					$option = $this->image($jsonVals['v1'], $jsonVals['v2']);
+                    $option = $this->image($jsonVals['v1'], $jsonVals['v2']);
                     break;
                 case 'imageURL':
-					$option = $this->imageURL($jsonVals['v1'], $jsonVals['v2']);
+                    $option = $this->imageURL($jsonVals['v1'], $jsonVals['v2']);
                     break;
                 case 'linkButton':
-					$option = $this->linkButton($jsonVals['v1'], $jsonVals['v2'], $jsonVals['v3']);
+                    $option = $this->linkButton($jsonVals['v1'], $jsonVals['v2'], $jsonVals['v3']);
                     break;
                 case 'markdown':
-					$option = $this->markdown($jsonVals['v1']);
+                    $option = $this->markdown($jsonVals['v1']);
                     break;
                 case 'markdownFile':
-					$option = $this->markdownFile($jsonVals['v1']);
+                    $option = $this->markdownFile($jsonVals['v1']);
                     break;
                 case 'addButton':
-                    $option = '$html->addButton(),'."\n";
-                    break;
-                    
-                default:
-                    $option = '';
+                    $option = '$html->addButton(),' . "\n";
                     break;
             }
-        } else { $option = ''; }
-        
+        }
         return $option;
     }
     
@@ -90,59 +93,48 @@ class DocBuilder
      * valuesToArray
      *
      * @param  array $values
-     * @param  string $file_path
+     * @param  string|null $file_path
      * @param  array $self
      *
      * @return array
      */
-    public function valuesToArray($values, $file_path = null, $self = [])
+    public function valuesToArray(array $values, ?string $file_path = null, array $self = []): array
     {
+        $option = $self;
         if (isset($values['options'])) {
             switch ($values['options']) {
                 case 'title':
-                    $option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => '', 'v3' => '', 'v4' => ''];
-                    break;
                 case 'description':
-                    $option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => '', 'v3' => '', 'v4' => ''];
-                    break;
                 case 'pathAdd':
+                case 'blockquote':
+                case 'markdown':
                     $option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => '', 'v3' => '', 'v4' => ''];
                     break;
                 case 'codeInline':
                     $option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => $values['language'], 'v3' => '', 'v4' => ''];
                     break;
                 case 'codeFile':
-                    $option = ['key' => $values['options'], 'v1' => substr($file_path, 5), 'v2' => $values['language'], 'v3' => '', 'v4' => ''];
-                    break;
-                case 'blockquote':
-                    $option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => '', 'v3' => '', 'v4' => ''];
+                    $option = ['key' => $values['options'], 'v1' => substr((string) $file_path, 5), 'v2' => $values['language'], 'v3' => '', 'v4' => ''];
                     break;
                 case 'image':
-                    $option = ['key' => $values['options'], 'v1' => substr($file_path, 5), 'v2' => $values['option_content'], 'v3' => '', 'v4' => ''];
+                    $option = ['key' => $values['options'], 'v1' => substr((string) $file_path, 5), 'v2' => $values['option_content'], 'v3' => '', 'v4' => ''];
                     break;
                 case 'imageURL':
-					$option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => $values['names'], 'v3' => '', 'v4' => ''];
+                    $option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => $values['names'], 'v3' => '', 'v4' => ''];
                     break;
                 case 'linkButton':
-					$option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => $values['names'], 'v3' => $values['trgs'], 'v4' => ''];
-                    break;
-                case 'markdown':
-					$option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => '', 'v3' => '', 'v4' => ''];
+                    $option = ['key' => $values['options'], 'v1' => $values['option_content'], 'v2' => $values['names'], 'v3' => $values['trgs'], 'v4' => ''];
                     break;
                 case 'markdownFile':
-					$option = ['key' => $values['options'], 'v1' => substr($file_path, 5), 'v2' => '', 'v3' => '', 'v4' => ''];
+                    $option = ['key' => $values['options'], 'v1' => substr((string) $file_path, 5), 'v2' => '', 'v3' => '', 'v4' => ''];
                     break;
                 case 'addButton':
                     $option = ['key' => 'addButton', 'v1' => '', 'v2' => '', 'v3' => '', 'v4' => ''];
                     break;
-                default:
-                    $option = $self;
-                    break;
             }
         }
-        
         return $option;
-    }  
+    }   
     
     /**
      * removeOldFile
@@ -152,11 +144,17 @@ class DocBuilder
      * @param  string $path
      *
      */
-    public function removeOldFile($key1, $key2, $path)
+    public function removeOldFile(string $key1, string $key2, string $path): void
     {
-        ($key1 == 'image' && $key2 != 'image') ? (file_exists($path) ? unlink($path) : NULL) : NULL;
-        ($key1 == 'codeFile' && $key2 != 'codeFile') ? (file_exists($path) ? unlink($path) : NULL) : NULL;
-        ($key1 == 'markdownFile' && $key2 != 'markdownFile') ? (file_exists($path) ? unlink($path) : NULL) : NULL;
+        if ($key1 === 'image' && $key2 !== 'image' && file_exists($path)) {
+            unlink($path);
+        }
+        if ($key1 === 'codeFile' && $key2 !== 'codeFile' && file_exists($path)) {
+            unlink($path);
+        }
+        if ($key1 === 'markdownFile' && $key2 !== 'markdownFile' && file_exists($path)) {
+            unlink($path);
+        }
     }
     
     /**
@@ -165,217 +163,185 @@ class DocBuilder
      * @param  string $id
      *
      */
-    public function buildPhpPage($id)
+    public function buildPhpPage(string $id): void
     {
         $data = $this->pageModel->getPageData($id);
         $path = $this->pageModel->getPhpPath($id);
         $anchors = [];
         $values = [];
         
-		foreach ($data as $vals) {
-		    $vals = $vals;
+        foreach ($data as $vals) {
             $values[] = $this->jsonSwitch($vals);
-    			if ($vals['key'] == "title") {
-    			    $anchors[] = "'".TextHelper::e($vals['v1'])."'";
-    			}
-		}
-			
-        $file = "<?php\n\n"
-                ."use DocPHT\Lib\DocPHT;\n\n"
-                .'$_SESSION'."['page_id'] = '".$id."';\n\n"
-                .'$html = new DocPHT(['.implode(',',$anchors)."]);\n"
-                .'$values'." = [\n".implode('', $values).'$html->addButton(),'."\n"."];";
-        
-        if (!file_exists(pathinfo($path, PATHINFO_DIRNAME))) {
-            mkdir(pathinfo($path, PATHINFO_DIRNAME), 0755, true);
-            file_put_contents($path, $file);
-        } else {
-            file_put_contents($path, $file);
+            if ($vals['key'] === "title") {
+                $anchors[] = "'" . TextHelper::e($vals['v1']) . "'";
+            }
         }
-
+            
+        $file = "<?php\n\n"
+                . "use App\Lib\DocPHT;\n\n"
+                . '$_SESSION' . "['page_id'] = '" . $id . "';\n\n"
+                . '$html = new DocPHT([' . implode(',', $anchors) . "]);\n"
+                . '$values' . " = [\n" . implode('', $values) . '$html->addButton(),' . "\n" . "];";
+        
+        $dir = pathinfo($path, PATHINFO_DIRNAME);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        file_put_contents($path, $file);
     }
     
     /**
      * startsWith
      *
-     * @param  mixed $haystack
-     * @param  mixed $needle
+     * @param  string $haystack
+     * @param  string $needle
      *
      * @return bool
      */
-    public function startsWith($haystack, $needle)
+    public function startsWith(string $haystack, string $needle): bool
     {
-         $length = strlen($needle);
-         return (substr($haystack, 0, $length) === $needle);
-    }    
+         return str_starts_with($haystack, $needle);
+    }   
 
     /**
     * datetimeNow
     *
     * @return string
     */
-    public static function datetimeNow() 
+    public static function datetimeNow(): string 
     {
-      $timeZone = new \DateTimeZone(TIMEZONE);
-      $datetime = new \DateTime();
-      $datetime->setTimezone($timeZone);
-      return $datetime->format(DATAFORMAT);
+        $timeZone = new \DateTimeZone(defined('TIMEZONE') ? TIMEZONE : 'UTC');
+        $datetime = new \DateTime('now', $timeZone);
+        return $datetime->format(defined('DATAFORMAT') ? DATAFORMAT : 'Y-m-d H:i:s');
     }
 
     /**
      * setFolderPermissions
-     * 
-     * @param  string $needle
+     *
+     * @param  string $folder
      *
      * @return void
      */
-    public function setFolderPermissions($folder)
+    public function setFolderPermissions(string $folder): void
     {
         $dirpath = $folder;
         $dirperm = 0755;
         $fileperm = 0644; 
-        chmod ($dirpath, $dirperm);
-        $glob = glob($dirpath."/*");
-        foreach($glob as $ch)
-        {
-            $ch = (is_dir($ch)) ? chmod ($ch, $dirperm) : chmod ($ch, $fileperm);
+        if (is_dir($dirpath)) {
+            @chmod($dirpath, $dirperm);
+            $glob = glob($dirpath . "/*");
+            if ($glob) {
+                foreach ($glob as $ch) {
+                    @is_dir($ch) ? @chmod($ch, $dirperm) : @chmod($ch, $fileperm);
+                }
+            }
         }
     }
     
     /**
      * upload
      *
-     * @param  string $file
+     * @param  \Nette\Http\FileUpload|null $file
      * @param  string $path
      *
-     * @return resource
+     * @return string
      */
-    public function upload($file, $path)
+    public function upload(?\Nette\Http\FileUpload $file, string $path): string
     {
-        if (isset($file) && $file->isOk()) {
-            $file_contents = $file->getContents();
-            $file_name = $file->getName();
-            $this->setFolderPermissions('data');
-            $file_path = 'data/' . substr(pathinfo($path, PATHINFO_DIRNAME ), 6) . '/' . uniqid() . '_' . $file_name;
-            file_put_contents($file_path, $file_contents);
+        if ($file && $file->isOk()) {
+            $file_path = 'data/' . substr(pathinfo($path, PATHINFO_DIRNAME), 5) . '/' . uniqid() . '_' . $file->getSanitizedName();
+            $file->move($file_path);
             return $file_path;
-        } else {
-            return '';
         }
-        
+        return '';
     }
 
-    
     /**
      * uploadNoUniqid
      *
-     * @param  string $file
+     * @param  \Nette\Http\FileUpload|null $file
      * @param  string $path
      *
-     * @return resource
+     * @return string
      */
-    public function uploadNoUniqid($file, $path)
+    public function uploadNoUniqid(?\Nette\Http\FileUpload $file, string $path): string
     {
-        if (isset($file) && $file->isOk()) {
-            $file_contents = $file->getContents();
-            $file_name = $file->getName();
-            $this->setFolderPermissions('data');
-            $file_path = 'data/' . substr(pathinfo($path, PATHINFO_DIRNAME ), 6) . '/' . $file_name;
-            file_put_contents($file_path, $file_contents);
+        if ($file && $file->isOk()) {
+            $file_path = 'data/' . substr(pathinfo($path, PATHINFO_DIRNAME), 5) . '/' . $file->getSanitizedName();
+            $file->move($file_path);
             return $file_path;
-        } else {
-            return '';
         }
-        
+        return '';
     }
 
     /**
      * uploadLogoDocPHT
      *
-     * @param  string $file
+     * @param  \Nette\Http\FileUpload|null $file
      *
-     * @return resource
+     * @return string
      */
-    public function uploadLogoDocPHT($file)
+    public function uploadLogoDocPHT(?\Nette\Http\FileUpload $file): string
     {
-        if (isset($file) && $file->isOk()) {
-            $file_contents = $file->getContents();
-            $this->setFolderPermissions('data');
+        if ($file && $file->isOk()) {
             $file_path = 'data/logo.png';
-            file_put_contents($file_path, $file_contents);
+            $file->move($file_path);
             return $file_path;
-        } else {
-            return '';
         }
-        
+        return '';
     }
 
     /**
      * uploadFavDocPHT
      *
-     * @param  string $file
+     * @param  \Nette\Http\FileUpload|null $file
      *
-     * @return resource
+     * @return string
      */
-    public function uploadFavDocPHT($file)
+    public function uploadFavDocPHT(?\Nette\Http\FileUpload $file): string
     {
-        if (isset($file) && $file->isOk()) {
-            $file_contents = $file->getContents();
-            $this->setFolderPermissions('data');
+        if ($file && $file->isOk()) {
             $file_path = 'data/favicon.png';
-            file_put_contents($file_path, $file_contents);
+            $file->move($file_path);
             return $file_path;
-        } else {
-            return '';
         }
-        
+        return '';
     }
     
     /**
      * uploadBackup
      *
-     * @param  string $file
+     * @param  \Nette\Http\FileUpload|null $file
      *
-     * @return resource
+     * @return string
      */
-    public function uploadBackup($file)
+    public function uploadBackup(?\Nette\Http\FileUpload $file): string
     {
-        if (isset($file) && $file->isOk()) {
-            $file_contents = $file->getContents();
-            $file_name = $file->getName();
-            $this->setFolderPermissions('data');
-            $file_path = 'data/' . $file_name;
-            file_put_contents($file_path, $file_contents);
+        if ($file && $file->isOk()) {
+            $file_path = 'data/' . $file->getSanitizedName();
+            $file->move($file_path);
             return $file_path;
-        } else {
-            return '';
         }
-        
+        return '';
     }
     
     /**
      * checkImportVersion
      *
-     * @param  string $file
+     * @param  string $file_path
      * @param  string $path
      *
      * @return bool
      */
-    public function checkImportVersion($file_path, $path)
+    public function checkImportVersion(string $file_path, string $path): bool
     {
         $zipData = new \ZipArchive(); 
-        if ($zipData->open($file_path) === TRUE) {
-
-            $check = is_bool($zipData->locateName($path)); 
+        if ($zipData->open($file_path) === true) {
+            $check = $zipData->locateName($path) !== false;
             $zipData->close();
-            
-            if ($check) { return false; } else { return true; }
-        } else {
-        
-        return false;
-        
+            return $check;
         }
-        
+        return false;
     }
     
     /**
@@ -386,12 +352,11 @@ class DocBuilder
      *
      * @return string
      */
-    public function title($val,$anch)
+    public function title(string $val, string $anch): string
     {
-    	$val = TextHelper::e($val);
+        $val = TextHelper::e($val);
         $anch = TextHelper::e($anch);
-        $out = '$html->title'."('{$val}','{$anch}'), \n";
-        return $out;
+        return '$html->title' . "('{$val}','{$anch}'), \n";
     }
     
     /**
@@ -401,11 +366,10 @@ class DocBuilder
      *
      * @return string
      */
-    public function description($val)
+    public function description(string $val): string
     {
         $val = TextHelper::e($val);
-        $out = '$html->description'."('{$val}'), \n";
-        return $out; 
+        return '$html->description' . "('{$val}'), \n";
     }
     
     /**
@@ -416,12 +380,11 @@ class DocBuilder
      *
      * @return string
      */
-    public function path($val,$ext)
+    public function path(string $val, string $ext): string
     {
         $val = TextHelper::e($val);
         $ext = TextHelper::e($ext);
-        $out = '$html->path'."('pages/{$val}.{$ext}'), \n";
-        return $out; 
+        return '$html->path' . "('pages/{$val}.{$ext}'), \n";
     }
 
     /**
@@ -432,12 +395,11 @@ class DocBuilder
      *
      * @return string
      */
-    public function pathHome($val,$ext)
+    public function pathHome(string $val, string $ext): string
     {
         $val = TextHelper::e($val);
         $ext = TextHelper::e($ext);
-        $out = '$html->path'."('data/{$val}.{$ext}'), \n";
-        return $out; 
+        return '$html->path' . "('data/{$val}.{$ext}'), \n";
     }
     
     /**
@@ -447,11 +409,10 @@ class DocBuilder
      *
      * @return string
      */
-    public function pathAdd($val)
+    public function pathAdd(string $val): string
     {
         $val = TextHelper::e($val);
-        $out = '$html->path'."('{$val}'), \n";
-        return $out; 
+        return '$html->path' . "('{$val}'), \n";
     }
     
     /**
@@ -462,11 +423,10 @@ class DocBuilder
      *
      * @return string
      */
-    public function codeInline($val,$lan)
+    public function codeInline(string $val, string $lan): string
     {
-        $val = addcslashes($val,"\'");
-        $out = '$html->codeInline'."('{$lan}','{$val}'), \n";
-        return $out; 
+        $val = addcslashes($val, "\'");
+        return '$html->codeInline' . "('{$lan}','{$val}'), \n";
     }
     
     /**
@@ -475,18 +435,16 @@ class DocBuilder
      * @param  string $src
      * @param  string $lan
      *
-     * @return resource
+     * @return string|void
      */
-    public function codeFile($src,$lan)
+    public function codeFile(string $src, string $lan)
     {
         if (!empty($src)) {
-            $src = addcslashes($src,"\'");
-            $out = '$html->codeFile'."('{$lan}','{$src}'), \n";
-            return $out;
-        } else {
-            $this->msg->error(T::trans('No files added for uploading'),$_SERVER['HTTP_REFERER']);
+            $src = addcslashes($src, "\'");
+            return '$html->codeFile' . "('{$lan}','{$src}'), \n";
         }
         
+        $this->flasher?->addError(T::trans('No files added for uploading'));
     }
     
     /**
@@ -496,11 +454,10 @@ class DocBuilder
      *
      * @return string
      */
-    public function blockquote($val)
+    public function blockquote(string $val): string
     {
         $val = TextHelper::e($val);
-        $out = '$html->blockquote'."('{$val}'), \n";
-        return $out; 
+        return '$html->blockquote' . "('{$val}'), \n";
     }
     
     /**
@@ -509,14 +466,13 @@ class DocBuilder
      * @param  string $src
      * @param  string $val
      *
-     * @return resource
+     * @return string
      */
-    public function image($src,$val)
+    public function image(string $src, string $val): string
     {
         $val = TextHelper::e($val);
         $src = TextHelper::e($src);
-        $out = '$html->image'."('{$src}','{$val}'), \n";
-        return $out; 
+        return '$html->image' . "('{$src}','{$val}'), \n";
     }
     
     /**
@@ -525,14 +481,13 @@ class DocBuilder
      * @param  string $src
      * @param  string $val
      *
-     * @return resource
+     * @return string
      */
-    public function imageURL($src,$val)
+    public function imageURL(string $src, string $val): string
     {
         $val = TextHelper::e($val);
         $src = TextHelper::e($src);
-        $out = '$html->imageURL'."('{$src}','{$val}'), \n";
-        return $out; 
+        return '$html->imageURL' . "('{$src}','{$val}'), \n";
     }
     
     /**
@@ -540,13 +495,12 @@ class DocBuilder
      *
      * @param  string $val
      *
-     * @return resource
+     * @return string
      */
-    public function markdown($val)
+    public function markdown(string $val): string
     {
-        $val = addcslashes($val,"\'");
-        $out = '$html->markdown'."('{$val}'), \n";
-        return $out; 
+        $val = addcslashes($val, "\'");
+        return '$html->markdown' . "('{$val}'), \n";
     }
     
     /**
@@ -554,18 +508,16 @@ class DocBuilder
      *
      * @param  string $src
      *
-     * @return resource
+     * @return string|void
      */
-    public function markdownFile($src)
+    public function markdownFile(string $src)
     {
         if (!empty($src)) {
-            $src = addcslashes($src,"\'");
-            $out = '$html->markdownFile'."('{$src}'), \n";
-            return $out;
-        } else {
-            $this->msg->error(T::trans('No files added for uploading'),$_SERVER['HTTP_REFERER']);
+            $src = addcslashes($src, "\'");
+            return '$html->markdownFile' . "('{$src}'), \n";
         }
         
+        $this->flasher?->addError(T::trans('No files added for uploading'));
     }
     
     /**
@@ -577,12 +529,11 @@ class DocBuilder
      *
      * @return string
      */
-    public function linkButton($src,$val,$trg)
+    public function linkButton(string $src, string $val, string $trg): string
     {
         $val = TextHelper::e($val);
         $src = TextHelper::e($src);
-        $out = '$html->linkButton'."('{$src}','{$val}','{$trg}'), \n";
-        return $out;
+        return '$html->linkButton' . "('{$src}','{$val}','{$trg}'), \n";
     }
     
     /**
@@ -590,213 +541,31 @@ class DocBuilder
      *
      * @return array
      */
-    public function getOptions()
+    public function getOptions(): array
     {
         return [
-        'title' => T::trans('Add title'),
-        'description' => T::trans('Add description'),
-    	'pathAdd'  => T::trans('Add path'),
-    	'codeInline' => T::trans('Add code inline'),
-    	'codeFile' => T::trans('Add code from file'),
-    	'blockquote' => T::trans('Add blockquote'),
-    	'image' => T::trans('Add image from file'),
-    	'imageURL' => T::trans('Add image from url'),
-    	'markdown' => T::trans('Add markdown'),
-    	'markdownFile' => T::trans('Add markdown from file'),
-    	'linkButton' => T::trans('Add link button')
-    	];
+            'title' => T::trans('Add title'),
+            'description' => T::trans('Add description'),
+            'pathAdd'  => T::trans('Add path'),
+            'codeInline' => T::trans('Add code inline'),
+            'codeFile' => T::trans('Add code from file'),
+            'blockquote' => T::trans('Add blockquote'),
+            'image' => T::trans('Add image from file'),
+            'imageURL' => T::trans('Add image from url'),
+            'markdown' => T::trans('Add markdown'),
+            'markdownFile' => T::trans('Add markdown from file'),
+            'linkButton' => T::trans('Add link button')
+        ];
     }
-
 
     /**
      * listCodeLanguages
      *
      * @return array
      */
-    public function listCodeLanguages()
+    public function listCodeLanguages(): array
     {
-        $json = '
-        {
-            "Markup":"markup",
-            "HTML":"html",
-            "CSS":"css",
-            "C-like":"clike",
-            "JavaScript":"javascript",
-            "ABAP":"abap",
-            "Augmented Backusâ€“Naur form":"abnf",
-            "ActionScript":"actionscript",
-            "Ada":"ada",
-            "Apache Configuration":"apacheconf",
-            "APL":"apl",
-            "AppleScript":"applescript",
-            "Arduino":"arduino",
-            "ARFF":"arff",
-            "AsciiDoc":"asciidoc",
-            "6502 Assembly":"asm6502",
-            "ASP.NET (C#)":"aspnet",
-            "AutoHotkey":"autohotkey",
-            "AutoIt":"autoit",
-            "Bash":"shell",
-            "BASIC":"basic",
-            "Batch":"batch",
-            "Bison":"bison",
-            "Backusâ€“Naur form":"bnf",
-            "Brainfuck":"brainfuck",
-            "Bro":"bro",
-            "C":"c",
-            "C#":"csharp",
-            "C++":"cpp",
-            "CIL":"cil",
-            "CoffeeScript":"coffeescript",
-            "CMake":"cmake",
-            "Clojure":"clojure",
-            "Crystal":"crystal",
-            "Content-Security-Policy":"csp",
-            "CSS Extras":"css-extras",
-            "D":"d",
-            "Dart":"dart",
-            "Diff":"diff",
-            "Django/Jinja2":"django",
-            "Docker":"docker",
-            "Extended Backusâ€“Naur form":"ebnf",
-            "Eiffel":"eiffel",
-            "EJS":"ejs",
-            "Elixir":"elixir",
-            "Elm":"elm",
-            "ERB":"erb",
-            "Erlang":"erlang",
-            "F#":"fsharp",
-            "Flow":"flow",
-            "Fortran":"fortran",
-            "G-code":"gcode",
-            "GEDCOM":"gedcom",
-            "Gherkin":"gherkin",
-            "Git":"git",
-            "GLSL":"glsl",
-            "GameMaker Language":"gml",
-            "Go":"go",
-            "GraphQL":"graphql",
-            "Groovy":"groovy",
-            "Haml":"haml",
-            "Handlebars":"handlebars",
-            "Haskell":"haskell",
-            "Haxe":"haxe",
-            "HCL":"hcl",
-            "HTTP":"http",
-            "HTTP Public-Key-Pins":"hpkp",
-            "HTTP Strict-Transport-Security":"hsts",
-            "IchigoJam":"ichigojam",
-            "Icon":"icon",
-            "Inform 7":"inform7",
-            "Ini":"ini",
-            "Io":"io",
-            "J":"j",
-            "Java":"java",
-            "JavaDoc":"javadoc",
-            "JavaDoc-like":"javadoclike",
-            "Java stack trace":"javastacktrace",
-            "Jolie":"jolie",
-            "JSDoc":"jsdoc",
-            "JS Extras":"js-extras",
-            "JSON":"json",
-            "JSONP":"jsonp",
-            "JSON5":"json5",
-            "Julia":"julia",
-            "Keyman":"keyman",
-            "Kotlin":"kotlin",
-            "LaTeX":"latex",
-            "Less":"less",
-            "Liquid":"liquid",
-            "Lisp":"lisp",
-            "LiveScript":"livescript",
-            "LOLCODE":"lolcode",
-            "Lua":"lua",
-            "Makefile":"makefile",
-            "Markdown":"markdown",
-            "Markup templating":"markup-templating",
-            "MATLAB":"matlab",
-            "MEL":"mel",
-            "Mizar":"mizar",
-            "Monkey":"monkey",
-            "N1QL":"n1ql",
-            "N4JS":"n4js",
-            "Nand To Tetris HDL":"nand2tetris-hdl",
-            "NASM":"nasm",
-            "nginx":"nginx",
-            "Nim":"nim",
-            "Nix":"nix",
-            "NSIS":"nsis",
-            "Objective-C":"objectivec",
-            "OCaml":"ocaml",
-            "OpenCL":"opencl",
-            "Oz":"oz",
-            "PARI/GP":"parigp",
-            "Parser":"parser",
-            "Pascal":"pascal",
-            "Perl":"perl",
-            "PHP":"php",
-            "PHPDoc":"phpdoc",
-            "PHP Extras":"php-extras",
-            "PL/SQL":"plsql",
-            "PowerShell":"powershell",
-            "Processing":"processing",
-            "Prolog":"prolog",
-            ".properties":"properties",
-            "Protocol Buffers":"protobuf",
-            "Pug":"pug",
-            "Puppet":"puppet",
-            "Pure":"pure",
-            "Python":"python",
-            "Q (kdb+ database)":"q",
-            "Qore":"qore",
-            "R":"r",
-            "React JSX":"jsx",
-            "React TSX":"tsx",
-            "Ren\"py":"renpy",
-            "Reason":"reason",
-            "Regex":"regex",
-            "reST (reStructuredText)":"rest",
-            "Rip":"rip",
-            "Roboconf":"roboconf",
-            "Ruby":"ruby",
-            "Rust":"rust",
-            "SAS":"sas",
-            "Sass (Sass)":"sass",
-            "Sass (Scss)":"scss",
-            "Scala":"scala",
-            "Scheme":"scheme",
-            "Smalltalk":"smalltalk",
-            "Smarty":"smarty",
-            "SQL":"sql",
-            "Soy (Closure Template)":"soy",
-            "Stylus":"stylus",
-            "Swift":"swift",
-            "TAP":"tap",
-            "Tcl":"tcl",
-            "Textile":"textile",
-            "TOML":"toml",
-            "Template Toolkit 2":"tt2",
-            "Twig":"twig",
-            "TypeScript":"typescript",
-            "T4 Text Templates (C#)":"t4-cs",
-            "T4 Text Templates (VB)":"t4-vb",
-            "T4 templating":"t4-templating",
-            "Vala":"vala",
-            "VB.Net":"vbnet",
-            "Velocity":"velocity",
-            "Verilog":"verilog",
-            "VHDL":"vhdl",
-            "vim":"vim",
-            "Visual Basic":"visual-basic",
-            "WebAssembly":"wasm",
-            "Wiki markup":"wiki",
-            "Xeora":"xeora",
-            "Xojo (REALbasic)":"xojo",
-            "XQuery":"xquery",
-            "YAML":"yaml"
-            }
-        ';
-
+        $json = file_get_contents(__DIR__ . '/../Translations/code-translations.json');
         return json_decode($json, true);
     }
 }

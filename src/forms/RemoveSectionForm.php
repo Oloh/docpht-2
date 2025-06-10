@@ -1,46 +1,39 @@
 <?php
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+declare(strict_types=1);
 
 namespace App\Forms;
 
+use App\Core\Translations\T;
 use Nette\Forms\Form;
-use Nette\Utils\Html;
-use DocPHT\Core\Translator\T;
 
 class RemoveSectionForm extends MakeupForm
 {
-
-    public function create()
+    public function create(): Form
     {
+        $form = new Form;
+        $form->onRender[] = [$this, 'bootstrap4'];
+        
+        $form->addGroup(T::trans('Remove section from this page'));
 
-        $id = $_SESSION['page_id'];
-        
-        if(isset($_GET['id'])) {
-            $rowIndex = intval($_GET['id']);
-        }
-        
-        if ($this->pageModel->getPageData($id)[$rowIndex]['key'] == 'image' || $this->pageModel->getPageData($id)[$rowIndex]['key'] == 'codeFile' || $this->pageModel->getPageData($id)[$rowIndex]['key'] == 'markdownFile') { 
-            unlink('data/' . $this->pageModel->getPageData($id)[$rowIndex]['v1']); 
-        } 
-        
-        $this->pageModel->removePageData($id, $rowIndex);
-        
-        if(isset($id)) {
-            $this->doc->buildPhpPage($id);
-            header('Location:'.$this->pageModel->getTopic($id).'/'.$this->pageModel->getFilename($id));
+        $sections = $this->pageModel->getSections($_SESSION['page_id']);
+        $form->addSelect('section_id', T::trans('Select a section to remove:'), $sections)
+            ->setPrompt(T::trans('Select a section'))
+            ->setRequired(T::trans('You must select a section.'));
+            
+        $form->addProtection(T::trans('Security token has expired, please submit the form again'));
+
+        $form->addSubmit('submit', T::trans('Remove section'));
+
+        if ($form->isSuccess()) {
+            $values = $form->getValues();
+            $this->pageModel->removeSection($values->section_id, $_SESSION['page_path']);
+            $this->doc->buildPhpPage($_SESSION['page_id']);
+            $this->flasher?->addSuccess(T::trans('Section removed successfully.'));
+            header('Location: ' . $_SERVER['HTTP_REFERER']);
             exit;
-        } else {
-    		$this->msg->error(T::trans('Sorry something didn\'t work!'));
         }
+
+        return $form;
     }
 }

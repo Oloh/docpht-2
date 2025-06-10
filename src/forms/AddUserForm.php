@@ -2,28 +2,28 @@
 
 /**
  * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
+ * * @author Valentino Pesce
  * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
  * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
+ * * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
+declare(strict_types=1);
+
 namespace App\Forms;
 
+use App\Core\Translations\T;
 use Latte\Engine;
 use Nette\Forms\Form;
 use Nette\Utils\Html;
 use Nette\Mail\Message;
 use Nette\Mail\SmtpMailer;
-use DocPHT\Core\Translator\T;
+use Nette\Mail\SendmailMailer;
 
 class AddUserForm extends MakeupForm
 {
-
-    public function create()
+    public function create(): Form
     {
         $form = new Form;
         $form->onRender[] = [$this, 'bootstrap4'];
@@ -42,26 +42,18 @@ class AddUserForm extends MakeupForm
         $form->addPassword('password', T::trans('Enter password:'))
             ->setHtmlAttribute('placeholder', T::trans('Enter password'))
             ->setHtmlAttribute('autocomplete','off')
-            ->setAttribute('onmousedown',"this.type='text'")
-            ->setAttribute('onmouseup',"this.type='password'")
-            ->setAttribute('onmousemove',"this.type='password'")
-            ->setOption('description', Html::el('small')->setAttribute('class','text-muted')->setText(T::trans('Click on the asterisks to show the password')))
-            ->addRule(Form::MIN_LENGTH, T::trans('The password must be at least 6 characters long'), 6)
+            ->addRule(Form::MIN_LENGTH, T::trans('The password must be at least 8 characters long.'), 8)
             ->setRequired(T::trans('Enter password'));
             
         $form->addPassword('confirmpassword', T::trans('Confirm password:'))
             ->setHtmlAttribute('placeholder', T::trans('Confirm password'))
             ->setHtmlAttribute('autocomplete','off')
-            ->setAttribute('onmousedown',"this.type='text'")
-            ->setAttribute('onmouseup',"this.type='password'")
-            ->setAttribute('onmousemove',"this.type='password'")
-            ->setOption('description', Html::el('small')->setAttribute('class','text-muted')->setText(T::trans('Click on the asterisks to show the password')))
             ->addRule($form::EQUAL, T::trans('Passwords do not match!'), $form['password'])
             ->setRequired(T::trans('Confirm password'));
         
         $form->addCheckbox('admin', T::trans('Add administrator privileges?'));
 
-        $translations = json_decode(file_get_contents(realpath('src/translations/code-translations.json')), true);
+        $translations = json_decode(file_get_contents(realpath(__DIR__ . '/../Translations/code-translations.json')), true);
         asort($translations);
         $form->addSelect('translations',T::trans('Language:'), $translations)
             ->setPrompt(T::trans('Select an option'))
@@ -74,47 +66,51 @@ class AddUserForm extends MakeupForm
 
         if ($form->isSuccess()) {
             $values = $form->getValues();
-            if (in_array($values['username'], $this->adminModel->getUsernames())) {
-                $this->msg->error(T::trans('This username %username% is in use!', ['%username%' => $values['username']]),BASE_URL.'admin');
-            } elseif (isset($values['username']) && isset($values['password']) && $values['password'] == $values['confirmpassword']) {
+            if (in_array($values->username, $this->adminModel->getUsernames())) {
+                $this->flasher?->addError(T::trans('This username %username% is in use!', ['%username%' => $values->username]));
+                header('Location: ' . $_SERVER['HTTP_REFERER']);
+                exit;
+            }
+
+            if (isset($values->username) && isset($values->password) && $values->password === $values->confirmpassword) {
                 $this->adminModel->create($values);
 
-                $latte = new \Latte\Engine;
-                    $params = [
-                        'BASE_URL' => BASE_URL,
-                        'title' => 'You now have a new account',
-                        'password' => $values['password'],
-                        'content' => 'Sign in now and start adding your content.'
-                    ]; 
+                $latte = new Engine;
+                $params = [
+                    'BASE_URL' => BASE_URL,
+                    'title' => 'You now have a new account',
+                    'password' => $values->password,
+                    'content' => 'Sign in now and start adding your content.'
+                ]; 
 
-                    $mail = new Message;
-                    $mail->setFrom('no-reply@'.DOMAIN_NAME.'')
-                        ->addTo($values['username'])
-                        ->setSubject('New account '.DOMAIN_NAME.' ')
-                        ->setHtmlBody($latte->renderToString('src/views/email/new_account.latte', $params));
-                    if (SMTPMAILER == true) {
-                        $mailer = new \Nette\Mail\SmtpMailer([
-                            'host' => SMTPHOST,
-                            'port' => SMTPPORT,
-                            'username' => SMTPUSERNAME,
-                            'password' => SMTPPASSWORD,
-                            'secure' => SMTPENCRYPT,
-                        ]);
-                        $mailer->send($mail);
-                    } else {
-                        $mailer = new SendmailMailer;
-                        $mailer->send($mail);
-                    }
-                $this->msg->success(T::trans('User created successfully.'),BASE_URL.'admin');
+                $mail = new Message;
+                $mail->setFrom('no-reply@'.DOMAIN_NAME)
+                    ->addTo($values->username)
+                    ->setSubject('New account '.DOMAIN_NAME)
+                    ->setHtmlBody($latte->renderToString(__DIR__ . '/../Views/email/new_account.latte', $params));
+
+                if (defined('SMTPMAILER') && SMTPMAILER === true) {
+                    $mailer = new SmtpMailer([
+                        'host' => SMTPHOST,
+                        'port' => SMTPPORT,
+                        'username' => SMTPUSERNAME,
+                        'password' => SMTPPASSWORD,
+                        'secure' => SMTPENCRYPT,
+                    ]);
+                    $mailer->send($mail);
+                } else {
+                    $mailer = new SendmailMailer;
+                    $mailer->send($mail);
+                }
+                $this->flasher?->addSuccess(T::trans('User created successfully.'));
+                header('Location:'.BASE_URL.'admin');
+                exit;
             } else {
-                $this->msg->error(T::trans('Sorry something didn\'t work!'),BASE_URL.'admin');
+                $this->flasher?->addError(T::trans('Sorry something didn\'t work!'));
+                header('Location:'.BASE_URL.'admin');
+                exit;
             }
-            $form->setValues([], TRUE);
         }
-
-        $renderer = $form->getRenderer();
-        $renderer->wrappers['pair']['.error'] = 'has-error';
-
         return $form;
     }
 }

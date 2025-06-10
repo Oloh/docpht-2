@@ -1,121 +1,26 @@
 <?php
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- *
- *
- */
+declare(strict_types=1);
+
 namespace App\Model;
 
-use DocPHT\Lib\DocBuilder;
-use DocPHT\Model\PageModel;
+use App\Core\Model\AbstractModel;
 
-class HomePageModel extends PageModel
+class HomePageModel extends AbstractModel
 {
-
-    /**
-     * get
-     *
-     *
-     * @return string|bool
-     */
-    public function get()
+    public function __construct()
     {
-        $data = $this->connect();
-        if (!is_null($data)) {
-            foreach($data as $value){
-                if($value['pages']['home'] == 1) {
-                  $path = $value['pages']['phppath'];  
-                  break;
-                }
-            } 
-            return (isset($path)) ? $path : false;
-        } else {
-            return false;
-        }
+        parent::__construct();
     }
     
-    /**
-     * set
-     *
-     *
-     * @return string|bool
-     */
-    public function set($id)
+    public function getHomePage(): ?array
     {
-        $data = $this->connect();
-
-        foreach ($data as $key => $value) {
-            if ($value['pages']['id'] === $id) {
-                if($value['pages']['home'] === 0) {
-                    $home = 1;
-                    $published = 0;
-                } else {
-                    $home = 0;
-                    $published = $value['pages']['published'];
-                }
-            } else {
-                $home = 0;
-                $published = $value['pages']['published'];
-            }
-            $pages[$key] = array(
-                'pages' => [
-                        'id' => $value['pages']['id'],
-                        'slug' => $value['pages']['slug'],
-                        'topic' => $value['pages']['topic'],
-                        'filename' => $value['pages']['filename'],
-                        'phppath' => $value['pages']['phppath'],
-                        'jsonpath' => $value['pages']['jsonpath'],
-                        'published' => $published,
-                        'home' => $home
-                ]
-            );
-        }
-
-        $this->disconnect(PageModel::DB, $pages);
-
+        $result = $this->db->fetch('SELECT `content` FROM `home_page` LIMIT 1');
+        return $result ? (array) $result : null;
     }
-    
-    /**
-     * getStatus
-     *
-     * @return array
-     */
-    public function getStatus($id)
+
+    public function updateHomePage(string $content): void
     {
-        $pages = $this->connect();
-        foreach ($pages as $value) {
-            
-            if ($value['pages']['id'] === $id) {
-                $home = $value['pages']['home'];
-            }
-        }
-
-        if ($home === 1) {
-            $array = [
-                'page' => 'Unset as homepage',
-                'btn' => 'btn-warning',
-                'icon' => 'fa-home',
-                'set' => false
-            ];
-        } else {
-            $array = [
-                'page' => 'Set as homepage',
-                'btn' => 'btn-outline-warning',
-                'icon' => 'fa-home',
-                'set' => true
-            ];
-        }
-
-        return $array;
+        $this->db->query('UPDATE `home_page` SET `content` = ?', $content);
     }
-    
-    
 }

@@ -2,34 +2,36 @@
 
 /**
  * This file is part of the Instant MVC micro-framework project.
- * * @package     Instant MVC micro-framework
- * @author      Valentino Pesce 
- * @link        https://github.com/kenlog
- * @copyright   2019 (c) Valentino Pesce <valentino@iltuobrand.it>
+ * * @package      Instant MVC micro-framework
+ * @author       Valentino Pesce 
+ * @link         https://github.com/kenlog
+ * @copyright    2019 (c) Valentino Pesce <valentino@iltuobrand.it>
  * * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
+declare(strict_types=1);
+
 namespace App\Core\Views;
 
-use DocPHT\Model\PageModel;
-use DocPHT\Model\AdminModel;
-use DocPHT\Core\Translator\T;
-use DocPHT\Model\BackupsModel;
-use DocPHT\Model\HomePageModel;
-use DocPHT\Form\VersionSelectForm;
-use Flasher\Prime\Flasher;
-use Flasher\Prime\Storage\StorageManager;
-use Symfony\Component\Translation\Translator;
-use Symfony\Component\Translation\Loader\ArrayLoader;
+use App\Model\PageModel;
+use App\Model\AdminModel;
+use App\Model\BackupsModel;
+use App\Model\HomePageModel;
+use App\Forms\VersionSelectForm;
+use App\Core\Translations\T;
+use Flasher\Prime\FlasherInterface;
+use Flasher\Prime\Response\Presenter\PresenterInterface;
 
 class View 
 {
-    protected $pageModel;
-    protected $backupsModel;
-    protected $homePageModel;
-    protected $version;
-    protected $msg;
+    protected PageModel $pageModel;
+    protected AdminModel $adminModel;
+    protected BackupsModel $backupsModel;
+    protected HomePageModel $homePageModel;
+    protected VersionSelectForm $version;
+    public ?FlasherInterface $flasher;
+    public ?PresenterInterface $flasherRenderer;
 
     public function __construct()
     {
@@ -39,49 +41,34 @@ class View
         $this->homePageModel = new HomePageModel();
         $this->version = new VersionSelectForm();
         
-        // This is the fix
-        $storageManager = new StorageManager();
-        $this->msg = new Flasher($storageManager);
+        // Use the central Flasher services created in index.php
+        $this->flasher = $GLOBALS['flasher'] ?? null;
+        $this->flasherRenderer = $GLOBALS['flasherRenderer'] ?? null;
     }
 
-    public function show($file, $data = null)
+    public function show(string $file, array $data = [])
     {
-        if (isset($_SESSION['Active'])) {
-            $adminModel = $this->adminModel;
-            $userLanguage = $adminModel->getUserTrans($_SESSION['Username']);
+        // This makes all necessary objects available as local variables to the included template file
+        $t = new T;
+        $pageModel = $this->pageModel;
+        $adminModel = $this->adminModel;
+        $backupsModel = $this->backupsModel;
+        $homePageModel = $this->homePageModel;
+        $version = $this->version;
+        $flasher = $this->flasher;
+        $flasherRenderer = $this->flasherRenderer;
 
-            if (isset($userLanguage)) {
-                $t = new Translator($userLanguage);
-                $t->addLoader('array', new ArrayLoader());
-                if (file_exists('src/translations/'.$userLanguage.'.php')) {
-                    include 'src/translations/'.$userLanguage.'.php';
-                } else {
-                    include 'src/translations/'.LANGUAGE.'.php';
-                } 
-            } 
-        } elseif (file_exists('src/translations/'.LANGUAGE.'.php')) {
-            $t = new Translator(LANGUAGE);
-            $t->addLoader('array', new ArrayLoader());
-            include 'src/translations/'.LANGUAGE.'.php';
-        } else {
-            echo "Make sure that the config.php file is present in the config folder and that the language code is entered.";
-            exit;
-        }
-        
-        if (is_array($data))
-        {
+        if (!empty($data)) {
             extract($data);
         }
-        $this->pageModel;
-        $this->msg;
-        $this->adminModel;
-        include 'src/views/'.$file;
+        
+        require __DIR__ . '/../../views/' . $file;
     }
 
-    public function load(string $title, string $path, array $viewdata = null)
+    public function load(string $title, string $path, array $viewdata = [])
     {
         $data = ['PageTitle' => T::trans($title)];
-        $this->show('partial/head.php',$data);
+        $this->show('partial/head.php', $data);
         $this->show($path, $viewdata);
         $this->show('partial/footer.php');
     }

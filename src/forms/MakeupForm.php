@@ -1,36 +1,28 @@
 <?php
 
-/**
- * This file is part of the DocPHT project.
- * * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+declare(strict_types=1);
 
 namespace App\Forms;
 
+use App\Model\PageModel;
+use App\Model\AdminModel;
+use App\Model\HomePageModel;
+use App\Model\VersionModel;
+use App\Model\BackupsModel;
+use App\Lib\DocBuilder;
+use Flasher\Prime\FlasherInterface;
 use Nette\Forms\Form;
-use DocPHT\Lib\DocBuilder;
-use DocPHT\Model\PageModel;
-use DocPHT\Model\VersionModel;
-use DocPHT\Model\BackupsModel;
-use DocPHT\Model\HomePageModel;
-use DocPHT\Model\AdminModel;
-use DocPHT\Core\Translator\T;
-use Flasher\Prime\Flasher;
-use Flasher\Prime\Storage\StorageManager;
+use Nette\Utils\Html;
 
 class MakeupForm
 {
-    protected $pageModel;
-    protected $homePageModel;
-    protected $adminModel;
-    protected $versionModel;
-    protected $backupsModel;
-    protected $doc;
-    protected $msg;
+    private PageModel $pageModel;
+    private HomePageModel $homePageModel;
+    private AdminModel $adminModel;
+    private VersionModel $versionModel;
+    private BackupsModel $backupsModel;
+    private DocBuilder $doc;
+    public ?FlasherInterface $flasher;
     
     public function __construct()
     {
@@ -40,35 +32,62 @@ class MakeupForm
         $this->versionModel = new VersionModel();
         $this->backupsModel = new BackupsModel();
         $this->doc = new DocBuilder();
-        $storageManager = new StorageManager();
-        $this->msg = new Flasher($storageManager);
+        
+        if (isset($GLOBALS['flasher'])) {
+            $this->flasher = $GLOBALS['flasher'];
+        } else {
+            $this->flasher = null;
+        }
     }
-    
-    public function bootstrap4(Form $form)
+
+    public function create(): Form
+    {
+        $form = new Form;
+        $form->onRender[] = [$this, 'bootstrap4'];
+        
+        $form->addSelect('theme_selector', 'Theme Selector:', [
+                'dark' => 'Dark',
+                'light' => 'Light'
+            ])
+            ->setHtmlAttribute('onChange', 'this.form.submit()')
+            ->setDefaultValue($this->adminModel->getTheme());
+            
+        $form->addSubmit('submit', 'Switch');
+
+        if ($form->isSuccess()) {
+            $values = $form->getValues();
+            $this->adminModel->setTheme($values->theme_selector);
+            $this->flasher->addSuccess('Data successfully updated.');
+            header('Location:' . $_SERVER['HTTP_REFERER']);
+            exit;
+        }
+
+        return $form;
+    }
+
+    public function bootstrap4(Form $form): void
     {
         $renderer = $form->getRenderer();
         $renderer->wrappers['controls']['container'] = null;
-        $renderer->wrappers['pair']['container'] = 'div class="form-group"';
+        $renderer->wrappers['pair']['container'] = 'div class="form-group row"';
         $renderer->wrappers['pair']['.error'] = 'has-danger';
-        $renderer->wrappers['control']['container'] = 'div class=col';
-        $renderer->wrappers['label']['container'] = 'div class="col col-form-label font-weight-bold"';
+        $renderer->wrappers['control']['container'] = 'div class=col-sm-9';
+        $renderer->wrappers['label']['container'] = 'div class="col-sm-3 col-form-label"';
         $renderer->wrappers['control']['description'] = 'span class=form-text';
-        $renderer->wrappers['control']['errorcontainer'] = 'span class=form-error';
+        $renderer->wrappers['control']['errorcontainer'] = 'span class=form-control-feedback';
+        $renderer->wrappers['control']['.error'] = 'is-invalid';
 
         foreach ($form->getControls() as $control) {
             $type = $control->getOption('type');
             if ($type === 'button') {
-                $control->getControlPrototype()->addClass(empty($usedPrimary) ? 'btn btn-secondary btn-block' : 'btn btn-primary');
+                $control->getControlPrototype()->addClass(empty($usedPrimary) ? 'btn btn-primary' : 'btn btn-secondary');
                 $usedPrimary = true;
-
             } elseif (in_array($type, ['text', 'textarea', 'select'], true)) {
-                $control->getControlPrototype()->addClass('form-control selectpicker');
-
+                $control->getControlPrototype()->addClass('form-control');
             } elseif ($type === 'file') {
                 $control->getControlPrototype()->addClass('form-control-file');
-
             } elseif (in_array($type, ['checkbox', 'radio'], true)) {
-                if ($control instanceof \Nette\Forms\Controls\Checkbox) {
+                if ($control instanceof Nette\Forms\Controls\Checkbox) {
                     $control->getLabelPrototype()->addClass('form-check-label');
                 } else {
                     $control->getItemLabelPrototype()->addClass('form-check-label');

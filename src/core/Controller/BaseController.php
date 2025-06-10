@@ -1,84 +1,116 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Core\Controller;
 
-use DocPHT\Form\LoginForm;
-use DocPHT\Form\SearchForm;
-use DocPHT\Model\PageModel;
-use DocPHT\Form\AddUserForm;
-use DocPHT\Model\AdminModel;
-use Instant\Core\Views\View;
-use DocPHT\Core\Translator\T;
-use DocPHT\Form\BackupsForms;
-use DocPHT\Form\HomePageForm;
-use DocPHT\Form\VersionForms;
-use DocPHT\Model\SearchModel;
-use DocPHT\Core\NewAppVersion;
-use DocPHT\Model\BackupsModel;
-use DocPHT\Model\VersionModel;
-use DocPHT\Form\AddSectionForm;
-use DocPHT\Form\CreatePageForm;
-use DocPHT\Form\DeletePageForm;
-use DocPHT\Form\RemoveUserForm;
-use DocPHT\Form\UpdatePageForm;
-use DocPHT\Form\UploadLogoForm;
-use DocPHT\Model\HomePageModel;
-use DocPHT\Core\Http\Session;
-use DocPHT\Form\PublishPageForm;
-use DocPHT\Form\SortSectionForm;
-use DocPHT\Form\UpdateEmailForm;
-use DocPHT\Model\AccessLogModel;
-use DocPHT\Form\LostPasswordForm;
-use DocPHT\Form\TranslationsForm;
-use DocPHT\Form\InsertSectionForm;
-use DocPHT\Form\ModifySectionForm;
-use DocPHT\Form\RemoveSectionForm;
-use DocPHT\Form\VersionSelectForm;
-use DocPHT\Form\UpdatePasswordForm;
-use DocPHT\Form\RecoveryPasswordForm;
+use App\Core\NewAppVersion;
+use App\Core\Http\Session;
+use App\Core\Views\View;
+use App\Forms\AddSectionForm;
+use App\Forms\AddUserForm;
+use App\Forms\BackupsForms;
+use App\Forms\CreatePageForm;
+use App\Forms\DeletePageForm;
+use App\Forms\HomePageForm;
+use App\Forms\InsertSectionForm;
+use App\Forms\LoginForm;
+use App\Forms\LostPasswordForm;
+use App\Forms\MakeupForm;
+use App\Forms\ModifySectionForm;
+use App\Forms\PublishPageForm;
+use App\Forms\RecoveryPasswordForm;
+use App\Forms\RemoveSectionForm;
+use App\Forms\RemoveUserForm;
+use App\Forms\SearchForm;
+use App\Forms\SortSectionForm;
+use App\Forms\TranslationsForm;
+use App\Forms\UpdateEmailForm;
+use App\Forms\UpdatePageForm;
+use App\Forms\UpdatePasswordForm;
+use App\Forms\UploadLogoForm;
+use App\Forms\VersionForms;
+use App\Forms\VersionSelectForm;
+use App\Model\AccessLogModel;
+use App\Model\AdminModel;
+use App\Model\BackupsModel;
+use App\Model\HomePageModel;
+use App\Model\PageModel;
+use App\Model\SearchModel;
+use App\Model\VersionModel;
 
-class BaseController
+abstract class BaseController
 {
-    protected $view;
-    protected $removeUserForm;
-    protected $updatePasswordForm;
-    // ... (all other protected properties) ...
-    protected $session;
-    protected $newAppVersion;
-    // REMOVED: protected $msg;
+    protected View $view;
+    protected UpdatePasswordForm $updatePasswordForm;
+    protected UpdateEmailForm $updateEmailForm;
+    protected AddUserForm $addUserForm;
+    protected RemoveUserForm $removeUserForm;
+    protected BackupsForms $backupsForms;
+    protected TranslationsForm $translationsForm;
+    protected UploadLogoForm $uploadlogo;
+    protected AccessLogModel $accessLogModel;
+    protected LostPasswordForm $lostPasswordForm;
+    protected ?RecoveryPasswordForm $recoveryPasswordForm = null; // Changed
+    protected LoginForm $loginForm;
+    protected HomePageModel $homePageModel;
+    protected SearchForm $searchForm;
+    protected SearchModel $searchModel;
+    protected PageModel $pageModel;
+    protected CreatePageForm $createPageForm;
+    protected UpdatePageForm $updatePageForm;
+    protected DeletePageForm $deletePageForm;
+    protected AddSectionForm $addSectionForm;
+    protected InsertSectionForm $insertSectionForm;
+    protected ModifySectionForm $modifySectionForm;
+    protected RemoveSectionForm $removeSectionForm;
+    protected SortSectionForm $sortSectionForm;
+    protected PublishPageForm $publishPageForm;
+    protected VersionSelectForm $versionSelectForm;
+    protected VersionForms $versionForms;
+    protected AdminModel $settings;
+    protected BackupsModel $backups;
+    protected VersionModel $versionModel;
+    protected MakeupForm $makeupForm;
+    protected HomePageForm $homePageForm;
+    protected Session $session;
+    protected NewAppVersion $newAppVersion;
 
     public function __construct()
     {
         $this->view = new View();
         $this->updatePasswordForm = new UpdatePasswordForm();
-        // ... (all other instantiations) ...
+        $this->updateEmailForm = new UpdateEmailForm();
+        $this->addUserForm = new AddUserForm();
+        $this->removeUserForm = new RemoveUserForm();
+        $this->backupsForms = new BackupsForms();
+        $this->translationsForm = new TranslationsForm();
+        $this->uploadlogo = new UploadLogoForm();
+        $this->accessLogModel = new AccessLogModel();
+        $this->lostPasswordForm = new LostPasswordForm();
+        // $this->recoveryPasswordForm is now created in LoginController
+        $this->loginForm = new LoginForm();
+        $this->homePageModel = new HomePageModel();
+        $this->searchForm = new SearchForm();
+        $this->searchModel = new SearchModel();
+        $this->pageModel = new PageModel();
+        $this->createPageForm = new CreatePageForm();
+        $this->updatePageForm = new UpdatePageForm();
+        $this->deletePageForm = new DeletePageForm();
+        $this->addSectionForm = new AddSectionForm();
+        $this->insertSectionForm = new InsertSectionForm();
+        $this->modifySectionForm = new ModifySectionForm();
+        $this->removeSectionForm = new RemoveSectionForm();
+        $this->sortSectionForm = new SortSectionForm();
+        $this->publishPageForm = new PublishPageForm();
+        $this->versionSelectForm = new VersionSelectForm();
+        $this->versionForms = new VersionForms();
+        $this->settings = new AdminModel();
+        $this->backups = new BackupsModel();
+        $this->versionModel = new VersionModel();
+        $this->makeupForm = new MakeupForm();
+        $this->homePageForm = new HomePageForm();
         $this->session = new Session();
         $this->newAppVersion = new NewAppVersion();
-        // REMOVED: The incorrect Flasher instantiation
-    }
-
-    public function search()
-    {
-        $this->searchModel->feed();
-        $results = $this->search->create();
-        if (isset($results)) {
-            $this->view->load('Search','search_results.php', ['results' => $results]);
-        } else {
-            // Use the global flasher() function
-            flasher()->info(T::trans('Search term did not produce results'));
-            header('Location:'.$_SERVER['HTTP_REFERER']);
-            exit;
-        }
-    }
-
-    public function switchTheme()
-    {
-        if (isset($_COOKIE["theme"]) && $_COOKIE["theme"] == 'dark') {
-            setcookie("theme", "light");            
-        } else {
-            setcookie("theme", "dark");
-        }
-        header('Location:'.$_SERVER['HTTP_REFERER']);
-        exit;
     }
 }

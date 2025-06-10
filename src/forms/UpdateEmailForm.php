@@ -1,52 +1,49 @@
 <?php
 
-/**
- * This file is part of the DocPHT project.
- * 
- * @author Valentino Pesce
- * @copyright (c) Valentino Pesce <valentino@iltuobrand.it>
- * @copyright (c) Craig Crosby <creecros@gmail.com>
- * 
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
+declare(strict_types=1);
 
 namespace App\Forms;
 
-use DocPHT\Core\Translator\T;
+use App\Core\Translations\T;
 use Nette\Forms\Form;
 use Nette\Utils\Html;
 
 class UpdateEmailForm extends MakeupForm
 {
+    public function create(): Form
+    {
+        $form = new Form;
+        $form->onRender[] = [$this, 'bootstrap4'];
+        
+        $form->addGroup(T::trans('Update Email for: ') . ($_SESSION['Username'] ?? ''))
+            ->setOption('description', T::trans('Enter a new email for the account.'));
 
-	public function create()
-	{
-		$form = new Form;
-		$form->onRender[] = [$this, 'bootstrap4'];
+        $form->addEmail('newemail', T::trans('Enter a new email address:'))
+            ->setHtmlAttribute('placeholder', T::trans('Enter a new email address'))
+            ->setRequired(T::trans('Enter a new email address'));
 
-		$form->addGroup(T::trans('Update email'));
+        $form->addPassword('password', T::trans('Confirm your password:'))
+            ->setHtmlAttribute('placeholder', T::trans('Enter your password'))
+            ->setRequired(T::trans('Enter your password'));
 
-		$form->addEmail('newemail', T::trans('New email:'))
-			->setHtmlAttribute('placeholder', T::trans('Enter new email'))
-			->setRequired(T::trans('Enter new email'));
-			
-		$form->addProtection(T::trans('Security token has expired, please submit the form again'));
-		
-		$form->addSubmit('submit',T::trans('Update email'));
+        $form->addProtection(T::trans('Security token has expired, please submit the form again'));
+        
+        $form->addSubmit('submit', T::trans('Update user email'));
 
-		if ($form->isSuccess()) {
+        if ($form->isSuccess()) {
             $values = $form->getValues();
-			if (in_array($values['newemail'], $this->adminModel->getUsernames())) {
-				$this->msg->error(T::trans('This email %newemail% is in use!', ['%newemail%' => $values['newemail']]),BASE_URL.'admin');
-            } elseif (isset($_SESSION['Username']) && isset($values['newemail'])) {
-				$this->adminModel->updateEmail($_SESSION['Username'], $values['newemail']);
-				$this->msg->success(T::trans('Email updated successfully.'),BASE_URL.'admin');
-			} else {
-				$this->msg->error(T::trans('Sorry something didn\'t work!'),BASE_URL.'admin');
-			}
-		}
-		
-		return $form;
-	}
+            if (isset($_SESSION['Username']) && $this->adminModel->verifyPassword($_SESSION['Username'], $values->password)) {
+                $this->adminModel->updateEmail($values->newemail, $_SESSION['Username']);
+                $this->flasher?->addSuccess(T::trans('User email updated successfully.'));
+                header('Location: ' . BASE_URL . 'admin');
+                exit;
+            } else {
+                $this->flasher?->addError(T::trans('Sorry, your password was not correct.'));
+                header('Location: ' . $_SERVER['HTTP_REFERER']);
+                exit;
+            }
+        }
+        
+        return $form;
+    }
 }
